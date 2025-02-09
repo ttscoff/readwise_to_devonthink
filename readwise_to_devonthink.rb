@@ -31,7 +31,6 @@ require 'optparse'
 #
 # ### Caveats
 #
-# - Highlights entire paragraph in Markdown, not just the highlighted text
 # - does not handle deletions
 # - does not highlight images
 #
@@ -41,6 +40,8 @@ require 'optparse'
 # - Add debug and verbose options
 # - Better search for existing notes (remove punctuation that breaks search)
 # - Add --quiet option to suppress output
+# - Highlight only selected text instead of whole paragraph
+# - Sort highlights by position
 
 options = {
   # Readwise API token, required, see <https://readwise.io/access_token>
@@ -88,14 +89,24 @@ class ::String
     gsub(/[^a-z0-9 ]/i, ' ').gsub(/ +/, ' ').strip
   end
 
-  # Make string searchable as regex
-  def content_rx
+  def fix_unicode
     gsub(/\\u2014/, '[-—]+')
       .gsub(/\\u2018/, '‘')
       .gsub(/\\u2019/, '’')
       .gsub(/\\u201c/, '“')
       .gsub(/\\u201d/, '”')
-      .gsub(/[^a-zA-Z0-9\-— ‘’“”,!?;]+/, '.*?')
+  end
+
+  def greedy
+    gsub(/\(http.*?\)/, '!')
+    .gsub(/[^a-z0-9\-—]+/i, '.*?')
+    .gsub(/(\.\*\? *)+/, '.*?')
+  end
+
+  # Make string searchable as regex
+  def content_rx
+    Regexp.escape(fix_unicode)
+      .gsub(/[^a-z0-9\-—‘’“”,!?:;.*()\/\\\s]+/i, '.*?').gsub(/(\.\*\? *)+/, '.*?')
   end
 
   # Normalize type
@@ -238,7 +249,9 @@ class ::String
   #   # => "{==some text==}"
   # @note Strips existing highlight markers if present
   def highlight(highlight)
-    "{==#{gsub(/(\{==|==\})/, '')}==}"
+    rx = /(\{==)?\[?#{highlight.text.fix_unicode.greedy}[.?!;:]*([\])][\[(].*?[)\]])?(==\})?[.?!;:]*/
+    gsub(/(\{==|==\})/, '').gsub(rx, '{==\0==}')
+    # "{==#{gsub(/(\{==|==\})/, '')}==}"
     # if (highlight.note && !highlight.note.whitespace_only?) || (highlight.tags && !highlight.tags.empty?)
     #   comment = []
     #   comment << highlight.note if highlight.note && !highlight.note.whitespace_only?
@@ -501,11 +514,11 @@ class Import
       highlights << Highlight.new({ text: highlight['text'].scrub,
                                     note: highlight['note'].scrub,
                                     tags: Tags.new(highlight[:tags]),
-                                    locations: highlight['location'],
+                                    location: highlight['location'],
                                     url: highlight['url'] })
     end
 
-    highlights
+    highlights.sort_by { |h| h.location }
   end
 
   # Fetches reading highlights from Readwise API and converts them to bookmarks
@@ -815,7 +828,8 @@ APPLESCRIPT`
   # @return [String, nil] timestamp of last update or nil if file doesn't exist
   def last_update
     if File.exist?(LAST_UPDATE)
-      IO.read(LAST_UPDATE).strip
+      last = IO.read(LAST_UPDATE).strip
+      last.whitespace_only? ? nil : last
     else
       debug("Last update record does not exist", level: :info)
       nil
