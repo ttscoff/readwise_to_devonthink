@@ -3,6 +3,7 @@ require 'English'
 require 'json'
 require 'date'
 require 'fileutils'
+require 'optparse'
 
 # Reader articles with highlights become searchable text with annotations in DEVONthink.
 #
@@ -20,10 +21,26 @@ require 'fileutils'
 # 4. Run script once to get all previous highlights, `/path/to/readwise_to_devonthink.rb`
 # 5. Set up a launchd job to run script at desired interval
 #
+# ### Notes
+#
+# In lieu of setting config options in the script, you can pass them as command line options:
+#
+# - Pass the token with the `--token` option
+# - Pass the type with the `--type` option
+# - Pass database and group with `--database` and `--group` options
+#
 # ### Caveats
 #
+# - Highlights entire paragraph in Markdown, not just the highlighted text
 # - does not handle deletions
 # - does not highlight images
+#
+# ### Changelog
+#
+# 2025-02-09:
+# - Add debug and verbose options
+# - Better search for existing notes (remove punctuation that breaks search)
+# - Add --quiet option to suppress output
 
 options = {
   # Readwise API token, required, see <https://readwise.io/access_token>
@@ -38,10 +55,39 @@ options = {
   group: 'inbox'
 }
 
-LAST_UPDATE = File.expand_path('~/.local/share/devonthink/readwise_last_update')
+LAST_UPDATE = File.expand_path("~/.local/share/devonthink/readwise_last_update")
+
+module Term
+  class << self
+    def silent
+      @silent ||= false
+    end
+
+    def silent=(silent)
+      @silent = silent ? true : false
+    end
+
+    def debug
+      @debug ||= 0
+    end
+
+    def debug=(level)
+      if level >= 2
+        @debug = 2
+      else
+        @debug = level
+      end
+    end
+  end
+end
 
 # String extensions
 class ::String
+  # Remove all non-alphanumeric characters
+  def no_punc
+    gsub(/[^a-z0-9 ]/i, ' ').gsub(/ +/, ' ').strip
+  end
+
   # Make string searchable as regex
   def content_rx
     gsub(/\\u2014/, '[-—]+')
@@ -183,6 +229,14 @@ class ::String
     matches
   end
 
+  # Formats text as a markdown highlight
+  #
+  # @param highlight [String] The text to be formatted as a highlight
+  # @return [String] The text wrapped in markdown highlight syntax {== ==}
+  # @example
+  #   highlight("some text")
+  #   # => "{==some text==}"
+  # @note Strips existing highlight markers if present
   def highlight(highlight)
     "{==#{gsub(/(\{==|==\})/, '')}==}"
     # if (highlight.note && !highlight.note.whitespace_only?) || (highlight.tags && !highlight.tags.empty?)
@@ -194,6 +248,11 @@ class ::String
   end
 
   # Highlight paragraphs in Markdown containing a highlight
+  # Takes an array of highlight definitions and applies highlighting to non-empty
+  # lines that match any of the highlight patterns.
+  #
+  # @param highlights [Array<Hash>] An array of Highlight objects
+  # @return [String] The text with highlighting applied, lines joined with newlines
   def highlight_markdown(highlights)
     lines = dup.scrub.split(/\n/)
     output = []
@@ -248,6 +307,15 @@ end
 class Highlight
   attr_reader :text, :note, :tags, :location, :url
 
+  # Initialize a new highlight object
+  #
+  # @param options [Hash] The options to create the highlight with
+  # @option options [String] :text The text of the highlight
+  # @option options [String] :note Any notes associated with the highlight
+  # @option options [Array<String>] :tags Array of tags for the highlight
+  # @option options [String] :location The location/source of the highlight
+  # @option options [String] :url The Readwise URL for the highlight
+  # @return [void]
   def initialize(options)
     @text = options[:text]
     @note = options[:note]
@@ -256,6 +324,22 @@ class Highlight
     @url = options[:url]
   end
 
+  # Converts the highlight and its metadata to a Markdown string
+  #
+  # @return [String] A formatted Markdown string containing:
+  #   - highlight text
+  #   - note (if present) formatted as a blockquote
+  #   - tags (if present) formatted with hashtags
+  #   - source URL as a Markdown link
+  #
+  # @example
+  #   highlight.to_md
+  #   # => "Highlight text
+  #
+  #        > Note text
+  #        Tags: #tag1 #tag2
+  #
+  #        - [Highlight link](http://example.com)"
   def to_md
     out = []
     out << @text
@@ -271,6 +355,20 @@ end
 class Bookmark
   attr_reader :url, :type, :title, :author, :image, :annotation, :highlights, :tags, :doc_note, :summary
 
+  # Initialize a new instance
+  #
+  # @param options [Hash] Options for creating a new instance
+  # @option options [String] :url The URL of the document
+  # @option options [String] :type The type of the document
+  # @option options [String] :title The title of the document
+  # @option options [String] :author The author of the document
+  # @option options [String] :image The cover image URL or path
+  # @option options [String] :annotation Collated highlights and summary
+  # @option options [Array] :highlights Array of highlights from the document
+  # @option options [Array] :tags Array of tags associated with the document
+  # @option options [String] :doc_note Document notes
+  # @option options [String] :summary Summary of the document
+  # @return [void]
   def initialize(options)
     @url = options[:url]
     @type = options[:type]
@@ -287,6 +385,12 @@ end
 
 # Tags class, represents an array<String> of tag names
 class Tags < Array
+  # Initializes a new instance with an array of tag hashes
+  #
+  # @param [Array<Hash>] tags An array of hashes containing tag information
+  #   Each hash should have a 'name' key with the tag name as value
+  # @return [nil] if tags parameter is nil
+  # @return [self] otherwise
   def initialize(tags)
     super()
     return nil if tags.nil?
@@ -296,10 +400,25 @@ class Tags < Array
     end
   end
 
+  # Converts array to AppleScript list format
+  #
+  # @return [String] Comma-separated string of array elements, or empty string if array is empty
+  #
+  # @example Convert non-empty array
+  #   ['one', 'two'].to_as #=> 'one,two'
+  #
+  # @example Convert empty array
+  #   [].to_as #=> ''
   def to_as
     empty? ? '' : join(',')
   end
 
+  # Converts array of tags to hashtag format
+  #
+  # @return [String] space-separated string of hashtags, empty string if array is empty
+  # @example
+  #   ['code', 'ruby'].to_hashtags #=> "#code #ruby"
+  #   [].to_hashtags #=> ""
   def to_hashtags
     empty? ? '' : map { |tag| "##{tag}" }.join(' ')
   end
@@ -308,11 +427,72 @@ end
 # Import bookmarks from a folder
 
 class Import
+  # Initializes a new instance of the class
+  #
+  # @param options [Hash] Configuration options for processing highlights
+  # @return [void]
   def initialize(options)
     @options = options
     @bookmarks = fetch_highlights
   end
 
+  # Save all bookmarks
+  # @param type [Symbol] type of archive to save
+  #
+  # @return [Array] success status
+  def save_all(type = :markdown)
+    @bookmarks.map do |bookmark|
+      save_to_dt(type, bookmark)
+    end
+
+    sleep 5
+
+    return unless type == :markdown
+
+    @bookmarks.each do |bookmark|
+      highlight_markdown(bookmark) if bookmark.type == :article
+    end
+  rescue StandardError => p
+    debug("Error #{p.message}", p.backtrace, level: :error)
+  end
+
+  private
+
+  # Print a message to STDERR unless @options[:silent] is true
+  def warn(message)
+    return if @options[:silent]
+
+    STDERR.puts message
+  end
+
+  # Print debug message and output if @options[:debug] is true
+  def debug(message, verbose = nil, level: :info)
+    return if Term.debug == 0
+
+    if message
+      case level
+      when :error
+        warn "ERROR: #{message}"
+      when :info
+        warn "INFO: #{message}"
+      else
+        warn "DEBUG: #{message}"
+      end
+    end
+
+    warn "\n#{verbose}" if verbose && Term.debug == 2
+  end
+
+  # Processes an array of highlight data and creates Highlight objects
+  #
+  # @param result [Hash] A hash containing an array of highlight data under the 'highlights' key
+  # @return [Array<Highlight>] An array of processed Highlight objects
+  # @example
+  #   result = { 'highlights' => [
+  #     { 'text' => 'example text', 'note' => 'example note', 'tags' => [],
+  #       'location' => '1241', 'url' => 'http://example.com' }
+  #   ]}
+  #   extract_highlights(result) #=> [#<Highlight:...>]
   def extract_highlights(result)
     highlights = []
     result['highlights'].each do |highlight|
@@ -328,12 +508,29 @@ class Import
     highlights
   end
 
+  # Fetches reading highlights from Readwise API and converts them to bookmarks
+  #
+  # @return [Array<Bookmark>] Array of Bookmark objects containing highlight data
+  # @raise [JSON::ParserError] if the API response cannot be parsed as JSON
+  #
+  # Each bookmark contains:
+  # - url: The source URL or unique URL for the highlight
+  # - type: The type of content (:article, :email, or :book)
+  # - title: The readable title of the content
+  # - author: The author of the content
+  # - image: URL of the cover image
+  # - annotation: Formatted highlights as markdown
+  # - highlights: Array of individual highlights
+  # - tags: Associated tags
+  # - doc_note: Any document notes
+  # - summary: Content summary if available
   def fetch_highlights
     bookmarks = []
     after = last_update ? "?updatedAfter=#{last_update}" : ''
 
     res = `curl -SsL -H "Authorization: Token #{@options[:token]}" https://readwise.io/api/v2/export#{after}`
     data = JSON.parse(res)
+    debug("#{data['results'].count} new highlights", level: :info)
     data['results'].each do |result|
       type = :article
       url = result['source_url']
@@ -367,26 +564,62 @@ class Import
     save_last_update
 
     bookmarks
+  rescue StandardError => p
+    debug("Error fetching bookmark JSON", p, level: :error)
   end
 
-  # Save all bookmarks
-  # @param type [Symbol] type of archive to save
+  # Returns the DevonThink database target as an AppleScript string
   #
-  # @return [Array] success status
-  def save_all(type = :markdown)
-    @bookmarks.map do |bookmark|
-      save_to_dt(type, bookmark)
-    end
-
-    sleep 5
-
-    return unless type == :markdown
-
-    @bookmarks.each do |bookmark|
-      highlight_markdown(bookmark) if bookmark.type == :article
+  # @return [String] 'inbox' if no database specified or database is 'global',
+  #                  otherwise returns 'database "[name]"' command string
+  def database
+    if !@options.key?(:database) || @options[:database] =~ /^global$/i
+      'inbox'
+    else
+      %(database "#{@options[:database]}")
     end
   end
 
+  # @return [String] Returns AppleScript commands as string
+  # Determines target group for new records
+  #
+  # If no :group option is specified or if group is "inbox", returns AppleScript command
+  # to set target to inbox. Otherwise returns commands to either get existing group or
+  # create new group at specified location.
+  #
+  # @example Setting inbox as target
+  #   group # => "set theGroup to inbox"
+  #
+  # @example Setting custom group as target
+  #   @options[:group] = "Research"
+  #   group # => Creates/gets "Research" group
+  def group
+    if !@options.key?(:group) || @options[:group] =~ /^inbox$/i
+      %(set theGroup to inbox)
+    else
+      %(set theGroup to get record at "#{@options[:group]}" in #{database}
+        if theGroup is missing value or type of theGroup is not group then
+          set theGroup to create location "#{@options[:group]}" in #{database}
+        end if)
+    end
+  end
+
+  # Creates an AppleScript command to import a bookmark to DEVONthink based on the target type
+  #
+  # @param type [Symbol] The type of record to create (:markdown, :bookmark, :archive, :pdf)
+  # @param bookmark [Bookmark] A Bookmark object containing title and URL information
+  #
+  # @return [String] An AppleScript command string for creating the specified record type
+  #
+  # @example Create a markdown record
+  #   command_for_type(:markdown, bookmark)
+  #   #=> 'set theRecord to create Markdown from "http://example.com" readability true name "Example" in theGroup'
+  #
+  # @example Create a bookmark record
+  #   command_for_type(:bookmark, bookmark)
+  #   #=> "set theRecord to create record with {name:"Example", type:bookmark, URL:"http://example.com"} in theGroup'
+  #
+  # @note Non-article bookmarks will always create a basic bookmark record regardless of specified type
   def command_for_type(type, bookmark)
     name = bookmark.title.e_as
 
@@ -426,7 +659,7 @@ class Import
             #{group}
 
             -- search for an existing record matching title
-            set searchResults to search "name:\\"#{name}\\"" in theGroup
+            set searchResults to search "name:\\"#{name.no_punc.e_as}\\"" in theGroup
             if searchResults is not {} then
               set theRecord to item 1 of searchResults
             else
@@ -457,6 +690,11 @@ class Import
             if theList is not {} then
               set tags of theRecord to theList
             end if
+
+            -- Set thumbnail if available
+            if "#{bookmark.image}" is not ""
+              set thumbnail of theRecord to "#{bookmark.image}"
+            end if
 			end tell)
 
     `osascript <<'APPLESCRIPT'
@@ -467,59 +705,78 @@ APPLESCRIPT`
       warn "🔖 Saved #{bookmark.title}"
     else
       warn "⁉️ Error saving #{bookmark.title}"
-      puts cmd
+      debug("Error saving bookmark #{bookmark.title}", cmd, level: :error)
     end
 
     $CHILD_STATUS.success?
   end
 
-  def database
-    if !@options.key?(:database) || @options[:database] =~ /^global$/i
-      'inbox'
-    else
-      %(database "#{@options[:database]}")
-    end
-  end
-
-  def group
-    if !@options.key?(:group) || @options[:group] =~ /^inbox$/i
-      %(set theGroup to inbox)
-    else
-      %(set theGroup to get record at "#{@options[:group]}" in #{database}
-        if theGroup is missing value or type of theGroup is not group then
-          set theGroup to create location "#{@options[:group]}" in #{database}
-        end if)
-    end
-  end
-
+  # Search for a record in DEVONthink by title and return its annotation
+  #
+  # @param title [String] The title of the record to search for
+  # @return [String] The plain text annotation of the matching record, or empty string if not found
+  # @example
+  #   annotation_for_title("My Document") #=> "This is the annotation text"
   def annotation_for_title(title)
-    `osascript <<'APPLESCRIPT'
-      tell application id "DNtp"
+    cmd = %(tell application id "DNtp"
         #{group}
 
-        set searchResults to search "name:\\"#{title.e_as}\\"" in theGroup
+        set searchResults to search "name:\\"#{title.no_punc.e_as}\\"" in theGroup
         if searchResults is not {} then
           set theRecord to item 1 of searchResults
           return plain text of (annotation of theRecord)
         end if
-      end tell
+      end tell)
+
+    annotation = `osascript <<'APPLESCRIPT'
+      #{cmd}
 APPLESCRIPT`.strip
+      if $CHILD_STATUS.success?
+        annotation
+      else
+        debug("Error getting annotation for #{title}", cmd, level: :error)
+      end
   end
 
+  # Retrieves content from DEVONthink record matching the given title
+  #
+  # @param title [String] The title of the DEVONthink record to search for
+  # @return [String] The plain text content of the matching record, or nil if not found
+  # @note Uses AppleScript to interact with DEVONthink
+  # @example
+  #   content = content_for_title("My Document")
   def content_for_title(title)
-    `osascript <<'APPLESCRIPT'
-      tell application id "DNtp"
+    cmd = %(tell application id "DNtp"
         #{group}
 
-        set searchResults to search "name:\\"#{title.e_as}\\"" in theGroup
+        set searchResults to search "name:\\"#{title.no_punc.e_as}\\"" in theGroup
         if searchResults is not {} then
           set theRecord to item 1 of searchResults
           return plain text of theRecord
         end if
-      end tell
+      end tell)
+
+    content = `osascript <<'APPLESCRIPT'
+        #{cmd}
 APPLESCRIPT`
+    if $CHILD_STATUS.success?
+      content
+    else
+      debug("Error getting content for #{title}", cmd, level: :error)
+      false
+    end
   end
 
+  # Updates DevonThink record with highlighted markdown for a given bookmark
+  #
+  # @param bookmark [Bookmark] The bookmark object containing title and highlights
+  # @return [Boolean] true if the update was successful, false otherwise
+  #
+  # @example
+  #   highlight_markdown(bookmark)
+  #
+  # @note Uses AppleScript to interface with DevonThink
+  # @see #content_for_title
   def highlight_markdown(bookmark)
     content = content_for_title(bookmark.title)
 
@@ -529,7 +786,7 @@ APPLESCRIPT`
       cmd = %(tell application id "DNtp"
           #{group}
 
-          set searchResults to search "name:\\"#{bookmark.title.e_as}\\"" in theGroup
+          set searchResults to search "name:\\"#{bookmark.title.no_punc.e_as}\\"" in theGroup
           if searchResults is not {} then
             set theRecord to item 1 of searchResults
             set plain text of theRecord to "#{content.e_as}"
@@ -539,67 +796,94 @@ APPLESCRIPT`
       `osascript <<'APPLESCRIPT'
         #{cmd}
 APPLESCRIPT`
-      warn "🔆 Highlighted #{bookmark.title}"
+      if $CHILD_STATUS.success?
+        warn "🔆 Highlighted #{bookmark.title}"
+        return true
+      else
+        debug("Error getting content for #{bookmark.title}", cmd, level: :error)
+        return false
+      end
     else
       warn "⁉️ Content not found for #{bookmark.title}"
+      return false
     end
-
-    $CHILD_STATUS.success?
   end
 
+  # Returns the timestamp of the last update from a file
+  #
+  # @return [String, nil] timestamp of last update or nil if file doesn't exist
   def last_update
     if File.exist?(LAST_UPDATE)
       IO.read(LAST_UPDATE).strip
     else
+      debug("Last update record does not exist", level: :info)
       nil
     end
   end
 
+  # Saves the current timestamp to a file specified by LAST_UPDATE constant
+  #
+  # @example
+  #   save_last_update # => Writes current timestamp to LAST_UPDATE file
+  #
+  # @return [String] The timestamp string that was written to file
+  # @raise [SystemCallError] If the file cannot be created or written to
   def save_last_update
     FileUtils.mkdir_p(File.dirname(LAST_UPDATE)) unless File.directory?(File.dirname(LAST_UPDATE))
 
-    File.write(LAST_UPDATE, Time.now.strftime('%Y-%m-%dT%H:%M:%S.%L%z'))
+    date = Time.now.strftime('%Y-%m-%dT%H:%M:%S.%L%z')
+    File.write(LAST_UPDATE, date)
+    debug("Saved last update: #{date}", level: :info)
+  rescue StandardError => p
+    debug("Error saving last update", p, level: :error)
   end
 end
 
-# Parse options
-# --folder [folder] - folder to import
-# --type [type] - type of archive to save
-# --database [database] - database to save to
-# --group [group] - group to save to
-# --help - show help
-#
-# @return [Hash] options
 def parse_options(options)
-  ARGV.each_with_index do |arg, i|
-    case arg
-    when '--token'
-      options[:token] = ARGV[i + 1]
-    when '--type'
-      options[:type] = ARGV[i + 1].normalize_type
-    when '--database'
-      options[:database] = ARGV[i + 1]
-    when '--group'
-      options[:group] = ARGV[i + 1]
-    when /-*h(elp)?/
-      puts <<~HELP
-        Configuration is defined at the top of #{File.expand_path(__FILE__)}
+  opt_parser = OptionParser.new do |opts|
+    opts.banner = "Usage: #{File.basename($PROGRAM_NAME)} [options]"
 
-        The following options override config settings:
+    opts.on('--token TOKEN', 'Readwise API token') do |token|
+      options[:token] = token
+    end
 
-        --token [token] - Readwise API token
-        --type [type] - type of archive to save
-        --database [database] - database to save to
-        --group [group] - group to save to
-        --help - show help
-      HELP
+    opts.on('-t', '--type TYPE', 'Type of archive to save (markdown, bookmark, archive, pdf)') do |type|
+      options[:type] = type.normalize_type
+    end
+
+    opts.on('-b', '--database DATABASE', 'Database to save to') do |db|
+      options[:database] = db
+    end
+
+    opts.on('-g', '--group GROUP', 'Group to save to') do |group|
+      options[:group] = group
+    end
+
+    opts.on_tail('-d', '--debug', 'Turn on debugging output') do |d|
+      Term.debug = 1 if Term.debug == 0
+    end
+
+    opts.on_tail('-v', '--verbose', 'Turn on verbose output') do |d|
+      Term.debug = 2
+    end
+
+    opts.on_tail('-q', '--quiet', 'Turn off all output') do
+      options[:silent] = true
+    end
+
+    opts.on_tail('-h', '--help', 'Show this help message') do
+      puts opts
+      puts "\nConfiguration is defined at the top of #{File.expand_path(__FILE__)}"
       exit
     end
   end
 
+  opt_parser.parse!
   options
 end
 
+Term.debug = 0
+options[:silent] = false
 options = parse_options(options)
 import = Import.new(options)
 import.save_all(options[:type])
