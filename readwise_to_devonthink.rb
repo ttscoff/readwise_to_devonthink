@@ -458,9 +458,9 @@ class Import
 
   private
 
-  # Print a message to STDERR unless @options[:silent] is true
+  # Print a message to STDERR unless Term.silent is true
   def warn(message)
-    return if @options[:silent]
+    return if Term.silent
 
     STDERR.puts message
   end
@@ -798,6 +798,7 @@ APPLESCRIPT`
 APPLESCRIPT`
       if $CHILD_STATUS.success?
         warn "🔆 Highlighted #{bookmark.title}"
+        debug("#{bookmark.highlights.count} highlights", bookmark.highlights.map { |h| h.text }.join("\n\n"), level: :info)
         return true
       else
         debug("Error getting content for #{bookmark.title}", cmd, level: :error)
@@ -868,7 +869,7 @@ def parse_options(options)
     end
 
     opts.on_tail('-q', '--quiet', 'Turn off all output') do
-      options[:silent] = true
+      Term.silent = true
     end
 
     opts.on_tail('-h', '--help', 'Show this help message') do
@@ -883,7 +884,7 @@ def parse_options(options)
 end
 
 Term.debug = 0
-options[:silent] = false
+Term.silent = false
 options = parse_options(options)
 import = Import.new(options)
 import.save_all(options[:type])
