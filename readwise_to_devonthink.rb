@@ -79,6 +79,30 @@ module Term
         @debug = level
       end
     end
+
+    def log(message = nil, verbose = nil, level: :info)
+      return if debug == 0
+
+      if message
+        case level
+        when :error
+          warn "ERROR: #{message}"
+        when :info
+          warn "INFO: #{message}"
+        else
+          warn "DEBUG: #{message}"
+        end
+      end
+
+      warn "\n#{verbose}" if verbose && debug == 2
+    end
+
+    # Print a message to STDERR unless Term.silent is true
+    def warn(message)
+      return if silent
+
+      STDERR.puts message
+    end
   end
 end
 
@@ -249,7 +273,7 @@ class ::String
   #   # => "{==some text==}"
   # @note Strips existing highlight markers if present
   def highlight(highlight)
-    rx = /(\{==)?\[?#{highlight.text.fix_unicode.greedy}[.?!;:]*([\])][\[(].*?[)\]])?(==\})?[.?!;:]*/
+    rx = /(\{==)?\[?#{highlight.text.fix_unicode.greedy}[.?!;:]*([\])][\[(].*?[)\]])?(==\})?[.?!;:]*/im
     gsub(/(\{==|==\})/, '').gsub(rx, '{==\0==}')
     # "{==#{gsub(/(\{==|==\})/, '')}==}"
     # if (highlight.note && !highlight.note.whitespace_only?) || (highlight.tags && !highlight.tags.empty?)
@@ -466,35 +490,10 @@ class Import
       highlight_markdown(bookmark) if bookmark.type == :article
     end
   rescue StandardError => p
-    debug("Error #{p.message}", p.backtrace, level: :error)
+    Term.log("Error #{p.message}", p.backtrace, level: :error)
   end
 
   private
-
-  # Print a message to STDERR unless Term.silent is true
-  def warn(message)
-    return if Term.silent
-
-    STDERR.puts message
-  end
-
-  # Print debug message and output if @options[:debug] is true
-  def debug(message, verbose = nil, level: :info)
-    return if Term.debug == 0
-
-    if message
-      case level
-      when :error
-        warn "ERROR: #{message}"
-      when :info
-        warn "INFO: #{message}"
-      else
-        warn "DEBUG: #{message}"
-      end
-    end
-
-    warn "\n#{verbose}" if verbose && Term.debug == 2
-  end
 
   # Processes an array of highlight data and creates Highlight objects
   #
@@ -543,7 +542,7 @@ class Import
 
     res = `curl -SsL -H "Authorization: Token #{@options[:token]}" https://readwise.io/api/v2/export#{after}`
     data = JSON.parse(res)
-    debug("#{data['results'].count} new highlights", level: :info)
+    Term.log("#{data['results'].count} new highlights", level: :info)
     data['results'].each do |result|
       type = :article
       url = result['source_url']
@@ -578,7 +577,7 @@ class Import
 
     bookmarks
   rescue StandardError => p
-    debug("Error fetching bookmark JSON", p, level: :error)
+    Term.log("Error fetching bookmark JSON", p, level: :error)
   end
 
   # Returns the DevonThink database target as an AppleScript string
@@ -715,10 +714,10 @@ class Import
 APPLESCRIPT`
 
     if $CHILD_STATUS.success?
-      warn "🔖 Saved #{bookmark.title}"
+      Term.warn "🔖 Saved #{bookmark.title}"
     else
-      warn "⁉️ Error saving #{bookmark.title}"
-      debug("Error saving bookmark #{bookmark.title}", cmd, level: :error)
+      Term.warn "⁉️ Error saving #{bookmark.title}"
+      Term.log("Error saving bookmark #{bookmark.title}", cmd, level: :error)
     end
 
     $CHILD_STATUS.success?
@@ -747,7 +746,7 @@ APPLESCRIPT`.strip
       if $CHILD_STATUS.success?
         annotation
       else
-        debug("Error getting annotation for #{title}", cmd, level: :error)
+        Term.log("Error getting annotation for #{title}", cmd, level: :error)
       end
   end
 
@@ -775,7 +774,7 @@ APPLESCRIPT`
     if $CHILD_STATUS.success?
       content
     else
-      debug("Error getting content for #{title}", cmd, level: :error)
+      Term.log("Error getting content for #{title}", cmd, level: :error)
       false
     end
   end
@@ -810,15 +809,15 @@ APPLESCRIPT`
         #{cmd}
 APPLESCRIPT`
       if $CHILD_STATUS.success?
-        warn "🔆 Highlighted #{bookmark.title}"
-        debug("#{bookmark.highlights.count} highlights", bookmark.highlights.map { |h| h.text }.join("\n\n"), level: :info)
+        Term.warn "🔆 Highlighted #{bookmark.title}"
+        Term.log("#{bookmark.highlights.count} highlights", bookmark.highlights.map { |h| h.text }.join("\n\n"), level: :info)
         return true
       else
-        debug("Error getting content for #{bookmark.title}", cmd, level: :error)
+        Term.log("Error getting content for #{bookmark.title}", cmd, level: :error)
         return false
       end
     else
-      warn "⁉️ Content not found for #{bookmark.title}"
+      Term.warn "⁉️ Content not found for #{bookmark.title}"
       return false
     end
   end
@@ -831,7 +830,7 @@ APPLESCRIPT`
       last = IO.read(LAST_UPDATE).strip
       last.whitespace_only? ? nil : last
     else
-      debug("Last update record does not exist", level: :info)
+      Term.log("Last update record does not exist", level: :info)
       nil
     end
   end
@@ -848,9 +847,9 @@ APPLESCRIPT`
 
     date = Time.now.strftime('%Y-%m-%dT%H:%M:%S.%L%z')
     File.write(LAST_UPDATE, date)
-    debug("Saved last update: #{date}", level: :info)
+    Term.log("Saved last update: #{date}", level: :info)
   rescue StandardError => p
-    debug("Error saving last update", p, level: :error)
+    Term.log("Error saving last update", p, level: :error)
   end
 end
 
