@@ -4,6 +4,9 @@ require 'json'
 require 'date'
 require 'fileutils'
 require 'optparse'
+require 'net/http'
+require 'uri'
+require 'cgi'
 
 # Reader articles with highlights become searchable text with annotations in DEVONthink.
 #
@@ -53,7 +56,9 @@ options = {
   # Database name, global is default
   database: 'global',
   # Group name or inbox, inbox is default
-  group: 'inbox'
+  group: 'inbox',
+  # If true will apply tags found in Marky-generated markdown and Readwise document tags
+  apply_tags: true
 }
 
 LAST_UPDATE = File.expand_path('~/.local/share/devonthink/readwise_last_update')
@@ -123,7 +128,7 @@ class ::String
 
   def greedy
     gsub(/\(http.*?\)/, '!')
-      .gsub(/[^a-z0-9\-—]+/i, '.*?')
+      .gsub(/[^a-z0-9]+/i, '.*?')
       .gsub(/(\.\*\? *)+/, '.*?')
   end
 
@@ -166,16 +171,6 @@ class ::String
   # @return [String] Markdown italicized text
   def italicize
     split(/\n/).map { |s| s.strip.empty? ? '' : "_#{s}_" }.join("\n")
-  end
-
-  #
-  # Some fixes for Marky output
-  #
-  # - Removes metadata to be replaced by this script's metadata
-  def marky_fix
-    content = strip.scrub
-    content.gsub!(/^(date|title|tags|source|description):.*?\n/, '')
-    content.strip
   end
 
   #
@@ -234,6 +229,16 @@ class ::String
       .chars.reject { |char| char.ascii_only? && (char.ord < 32 || char.ord == 127) }.join
   end
 
+  # Strip Markdown superscript formatting
+  #
+  # @return [String] stripped text
+  # @example
+  #  "This is a^superscript^".strip_sup_sub
+  #  # => "This is a superscript"
+  def strip_sup
+    gsub(/\^([^\^]+)\^/, '\1')
+  end
+
   # Strip Markdown formatting
   #
   # @return [String] stripped text
@@ -241,6 +246,7 @@ class ::String
     gsub(/!?\[(.*?)\]([(\[].*?[\])])/, '\1')
       .gsub(/(\*+)(.*?)\1/, '\2')
       .gsub(/(_+)(.*?)\1/, '\2')
+      .strip_sup
       .gsub(/^#+ */, '')
       .gsub(/^(> *)+/, '')
   end
@@ -255,7 +261,7 @@ class ::String
     highlights.each_with_index do |highlight, i|
       next if highlight.text.scrub.strip_markdown.empty?
 
-      if strip_markdown =~ /#{highlight.text.scrub.strip_markdown.content_rx}/
+      if strip_markdown =~ /#{highlight.text.strip_markdown.fix_unicode.greedy}/
         matches = i
         break
       end
@@ -273,8 +279,8 @@ class ::String
   #   # => "{==some text==}"
   # @note Strips existing highlight markers if present
   def highlight(highlight)
-    rx = /(\{==)?\[?#{highlight.text.fix_unicode.greedy}[.?!;:]*([\])][\[(].*?[)\]])?(==\})?[.?!;:]*/im
-    gsub(/(\{==|==\})/, '').gsub(rx, '{==\0==}')
+    rx = /(\{==)?\[?#{highlight.text.strip_markdown.fix_unicode.greedy}[.?!;:]*([\])][\[(].*?[)\]])?(==\})?[.?!;:]*/im
+    strip_sup.gsub(/(\{==|==\})/, '').gsub(rx, '{==\0==}')
     # "{==#{gsub(/(\{==|==\})/, '')}==}"
     # if (highlight.note && !highlight.note.whitespace_only?) || (highlight.tags && !highlight.tags.empty?)
     #   comment = []
@@ -495,6 +501,30 @@ class Import
 
   private
 
+  # Test if URL result is meta redirect
+  #
+  # @return [String] final url after following redirects
+  #
+  def redirect?(url)
+    content = `curl -SsL "#{url}"`.scrub
+    url = redirect?(Regexp.last_match(1)) if content =~ /meta http-equiv=["']refresh["'].*?url=(.*?)["']/
+    url
+  end
+
+  # markdownify url with Marky the Markdownifier
+  #
+  # @param url [String] URL to markdownify
+  #
+  # @return [String] markdown content
+  #
+  def marky(url)
+    url = redirect?(url)
+
+    call = %(https://heckyesmarkdown.com/api/2/?url=#{CGI.escape(url)}&readability=1)
+
+    `curl -SsL "#{call}"`.scrub.strip
+  end
+
   # Processes an array of highlight data and creates Highlight objects
   #
   # @param result [Hash] A hash containing an array of highlight data under the 'highlights' key
@@ -640,7 +670,21 @@ class Import
     else
       cmd = case type
             when :markdown
-              %(set theRecord to create Markdown from "#{bookmark.url}" readability true name "#{name}" in theGroup)
+              path = path_for_title(bookmark.title)
+              if path
+                if @options[:apply_tags]
+                  tags = IO.read(path).match(/^tags: (.*?)$/)&.captures&.first || ''
+                  @marky_tags = tags.split(',').map(&:strip)
+                end
+                ''
+              else
+                content = marky(bookmark.url)
+                if @options[:apply_tags]
+                  tags = content.match(/^tags: (.*?)$/)&.captures&.first || ''
+                  @marky_tags = tags.split(',').map(&:strip)
+                end
+                %(set theRecord to create record with {name:"#{name}", type:markdown, URL:"#{bookmark.url}", content:"#{content.e_as}"} in theGroup)
+              end
             when :bookmark
               %(set theRecord to create record with {name:"#{name}", type:bookmark, URL:"#{bookmark.url}"} in theGroup)
             when :archive
@@ -659,7 +703,8 @@ class Import
   def save_to_dt(type = :markdown, bookmark)
     name = bookmark.title.e_as
     annotation = [bookmark.summary, bookmark.doc_note, bookmark.annotation].delete_if(&:empty?).join("\n\n").e_as
-    tags = bookmark.tags.to_as
+    bookmark.tags.concat(@marky_tags) if @marky_tags
+    tags = @options[:apply_tags] ? bookmark.tags.to_as : ''
 
     cmd = command_for_type(type, bookmark)
 
@@ -750,6 +795,28 @@ APPLESCRIPT`.strip
     end
   end
 
+  def path_for_title(title)
+    cmd = %(tell application id "DNtp"
+        #{group}
+
+        set searchResults to search "name:\\"#{title.no_punc.e_as}\\"" in theGroup
+        if searchResults is not {} then
+          set theRecord to item 1 of searchResults
+          return path of theRecord
+        end if
+      end tell)
+
+    path = `osascript <<'APPLESCRIPT'
+        #{cmd}
+APPLESCRIPT`
+
+    if $CHILD_STATUS.success? && !path.whitespace_only?
+      path.strip
+    else
+      false
+    end
+  end
+
   # Retrieves content from DEVONthink record matching the given title
   #
   # @param title [String] The title of the DEVONthink record to search for
@@ -758,21 +825,10 @@ APPLESCRIPT`.strip
   # @example
   #   content = content_for_title("My Document")
   def content_for_title(title)
-    cmd = %(tell application id "DNtp"
-        #{group}
+    path = path_for_title(title)
 
-        set searchResults to search "name:\\"#{title.no_punc.e_as}\\"" in theGroup
-        if searchResults is not {} then
-          set theRecord to item 1 of searchResults
-          return plain text of theRecord
-        end if
-      end tell)
-
-    content = `osascript <<'APPLESCRIPT'
-        #{cmd}
-APPLESCRIPT`
-    if $CHILD_STATUS.success?
-      content
+    if path
+      IO.read(path.strip)
     else
       Term.log("Error getting content for #{title}", cmd, level: :error)
       false
@@ -791,11 +847,10 @@ APPLESCRIPT`
   # @see #content_for_title
   def highlight_markdown(bookmark)
     content = content_for_title(bookmark.title)
-    puts content
-    puts '*******'
+
     if content && !content.whitespace_only?
       content = content.highlight_markdown(bookmark.highlights)
-      puts content
+
       cmd = %(tell application id "DNtp"
           #{group}
 
@@ -874,6 +929,10 @@ def parse_options(options)
 
     opts.on('-g', '--group GROUP', 'Group to save to') do |group|
       options[:group] = group
+    end
+
+    opts.on('--apply-tags', 'Apply tags from Marky generated markdown') do
+      options[:apply_tags] = true
     end
 
     opts.on_tail('-d', '--debug', 'Turn on debugging output') do |d|
