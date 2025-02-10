@@ -85,6 +85,15 @@ module Term
                end
     end
 
+    # Log a message with an optional verbose string
+    #
+    # @param message [String, nil] The message to log
+    # @param verbose [String, nil] Additional verbose information to log if debug level is 2
+    # @param level [Symbol] The log level (:error, :info, or :debug)
+    # @return [nil] Returns nil if debug is 0
+    # @example
+    #   log("Process complete", level: :info)
+    #   log("Failed to connect", "Connection timeout after 30s", level: :error)
     def log(message = nil, verbose = nil, level: :info)
       return if debug == 0
 
@@ -118,6 +127,16 @@ class ::String
     gsub(/[^a-z0-9 ]/i, ' ').gsub(/ +/, ' ').strip
   end
 
+  # Converts unicode escape sequences to their equivalent characters
+  #
+  # Replaces common unicode sequences with their ASCII/UTF-8 equivalents:
+  # - \u2014 (em dash) -> —
+  # - \u2018 (left single quote) -> '
+  # - \u2019 (right single quote) -> '
+  # - \u201c (left double quote) -> "
+  # - \u201d (right double quote) -> "
+  #
+  # @return [String] String with unicode sequences replaced
   def fix_unicode
     gsub(/\\u2014/, '[-—]+')
       .gsub(/\\u2018/, '‘')
@@ -126,6 +145,11 @@ class ::String
       .gsub(/\\u201d/, '”')
   end
 
+  # Make a very fuzzy search regex
+  # - Replace URLs with a placeholder
+  # - Replace all non-alphanumeric characters with a wildcard
+  # - Replace multiple wildcards with a single wildcard
+  # @return [String] fuzzy search regex
   def greedy
     gsub(/\(http.*?\)/, '!')
       .gsub(/[^a-z0-9]+/i, '.*?')
@@ -133,6 +157,9 @@ class ::String
   end
 
   # Make string searchable as regex
+  # - Escape special characters
+  # - Replace all non-alphanumeric characters with a wildcard
+  # - Replace multiple wildcards with a single wildcard
   def content_rx
     Regexp.escape(fix_unicode)
           .gsub(%r{[^a-z0-9\-—‘’“”,!?:;.*()/\\\s]+}i, '.*?').gsub(/(\.\*\? *)+/, '.*?')
@@ -795,6 +822,12 @@ APPLESCRIPT`.strip
     end
   end
 
+  # Search for a record in DEVONthink by title and return its path
+  #
+  # @param title [String] The title of the record to search for
+  # @return [String] The path of the matching record, or false if not found
+  # @example
+  #   path_for_title("My Document") #=> "/path/to/My Document.md
   def path_for_title(title)
     cmd = %(tell application id "DNtp"
         #{group}
