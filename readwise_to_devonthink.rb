@@ -45,6 +45,12 @@ require 'cgi'
 # - Add --quiet option to suppress output
 # - Highlight only selected text instead of whole paragraph
 # - Sort highlights by position
+#
+# 2025-02-10:
+# - Switch to using Marky the Markdownifier (v2) for article content
+#   - fixes issues with non-ascii characters
+# - Add --apply-tags option to apply tags from Readwise and Marky
+# - fix highlighting with superscript
 
 options = {
   # Readwise API token, required, see <https://readwise.io/access_token>
