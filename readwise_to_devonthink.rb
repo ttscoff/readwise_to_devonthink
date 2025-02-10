@@ -56,7 +56,7 @@ options = {
   group: 'inbox'
 }
 
-LAST_UPDATE = File.expand_path("~/.local/share/devonthink/readwise_last_update")
+LAST_UPDATE = File.expand_path('~/.local/share/devonthink/readwise_last_update')
 
 module Term
   class << self
@@ -73,11 +73,11 @@ module Term
     end
 
     def debug=(level)
-      if level >= 2
-        @debug = 2
-      else
-        @debug = level
-      end
+      @debug = if level >= 2
+                 2
+               else
+                 level
+               end
     end
 
     def log(message = nil, verbose = nil, level: :info)
@@ -86,22 +86,22 @@ module Term
       if message
         case level
         when :error
-          warn "ERROR: #{message}"
+          stderr "ERROR: #{message}"
         when :info
-          warn "INFO: #{message}"
+          stderr "INFO: #{message}"
         else
-          warn "DEBUG: #{message}"
+          stderr "DEBUG: #{message}"
         end
       end
 
-      warn "\n#{verbose}" if verbose && debug == 2
+      stderr "\n#{verbose}" if verbose && debug == 2
     end
 
     # Print a message to STDERR unless Term.silent is true
-    def warn(message)
+    def stderr(message)
       return if silent
 
-      STDERR.puts message
+      warn message
     end
   end
 end
@@ -123,14 +123,14 @@ class ::String
 
   def greedy
     gsub(/\(http.*?\)/, '!')
-    .gsub(/[^a-z0-9\-—]+/i, '.*?')
-    .gsub(/(\.\*\? *)+/, '.*?')
+      .gsub(/[^a-z0-9\-—]+/i, '.*?')
+      .gsub(/(\.\*\? *)+/, '.*?')
   end
 
   # Make string searchable as regex
   def content_rx
     Regexp.escape(fix_unicode)
-      .gsub(/[^a-z0-9\-—‘’“”,!?:;.*()\/\\\s]+/i, '.*?').gsub(/(\.\*\? *)+/, '.*?')
+          .gsub(%r{[^a-z0-9\-—‘’“”,!?:;.*()/\\\s]+}i, '.*?').gsub(/(\.\*\? *)+/, '.*?')
   end
 
   # Normalize type
@@ -489,8 +489,8 @@ class Import
     @bookmarks.each do |bookmark|
       highlight_markdown(bookmark) if bookmark.type == :article
     end
-  rescue StandardError => p
-    Term.log("Error #{p.message}", p.backtrace, level: :error)
+  rescue StandardError => e
+    Term.log("Error #{e.message}", e.backtrace, level: :error)
   end
 
   private
@@ -576,8 +576,8 @@ class Import
     save_last_update
 
     bookmarks
-  rescue StandardError => p
-    Term.log("Error fetching bookmark JSON", p, level: :error)
+  rescue StandardError => e
+    Term.log('Error fetching bookmark JSON', e, level: :error)
   end
 
   # Returns the DevonThink database target as an AppleScript string
@@ -714,9 +714,9 @@ class Import
 APPLESCRIPT`
 
     if $CHILD_STATUS.success?
-      Term.warn "🔖 Saved #{bookmark.title}"
+      Term.stderr "🔖 Saved #{bookmark.title}"
     else
-      Term.warn "⁉️ Error saving #{bookmark.title}"
+      Term.stderr "⁉️ Error saving #{bookmark.title}"
       Term.log("Error saving bookmark #{bookmark.title}", cmd, level: :error)
     end
 
@@ -743,11 +743,11 @@ APPLESCRIPT`
     annotation = `osascript <<'APPLESCRIPT'
       #{cmd}
 APPLESCRIPT`.strip
-      if $CHILD_STATUS.success?
-        annotation
-      else
-        Term.log("Error getting annotation for #{title}", cmd, level: :error)
-      end
+    if $CHILD_STATUS.success?
+      annotation
+    else
+      Term.log("Error getting annotation for #{title}", cmd, level: :error)
+    end
   end
 
   # Retrieves content from DEVONthink record matching the given title
@@ -791,10 +791,11 @@ APPLESCRIPT`
   # @see #content_for_title
   def highlight_markdown(bookmark)
     content = content_for_title(bookmark.title)
-
+    puts content
+    puts '*******'
     if content && !content.whitespace_only?
       content = content.highlight_markdown(bookmark.highlights)
-
+      puts content
       cmd = %(tell application id "DNtp"
           #{group}
 
@@ -809,16 +810,18 @@ APPLESCRIPT`
         #{cmd}
 APPLESCRIPT`
       if $CHILD_STATUS.success?
-        Term.warn "🔆 Highlighted #{bookmark.title}"
-        Term.log("#{bookmark.highlights.count} highlights", bookmark.highlights.map { |h| h.text }.join("\n\n"), level: :info)
-        return true
+        Term.stderr "🔆 Highlighted #{bookmark.title}"
+        Term.log("#{bookmark.highlights.count} highlights", bookmark.highlights.map do |h|
+          h.text
+        end.join("\n\n"), level: :info)
+        true
       else
         Term.log("Error getting content for #{bookmark.title}", cmd, level: :error)
-        return false
+        false
       end
     else
-      Term.warn "⁉️ Content not found for #{bookmark.title}"
-      return false
+      Term.stderr "⁉️ Content not found for #{bookmark.title}"
+      false
     end
   end
 
@@ -830,7 +833,7 @@ APPLESCRIPT`
       last = IO.read(LAST_UPDATE).strip
       last.whitespace_only? ? nil : last
     else
-      Term.log("Last update record does not exist", level: :info)
+      Term.log('Last update record does not exist', level: :info)
       nil
     end
   end
@@ -848,8 +851,8 @@ APPLESCRIPT`
     date = Time.now.strftime('%Y-%m-%dT%H:%M:%S.%L%z')
     File.write(LAST_UPDATE, date)
     Term.log("Saved last update: #{date}", level: :info)
-  rescue StandardError => p
-    Term.log("Error saving last update", p, level: :error)
+  rescue StandardError => e
+    Term.log('Error saving last update', e, level: :error)
   end
 end
 
