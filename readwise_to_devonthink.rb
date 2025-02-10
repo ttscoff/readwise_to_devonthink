@@ -672,10 +672,7 @@ class Import
     if !@options.key?(:group) || @options[:group] =~ /^inbox$/i
       %(set theGroup to inbox)
     else
-      %(set theGroup to get record at "#{@options[:group]}" in #{database}
-        if theGroup is missing value or type of theGroup is not group then
-          set theGroup to create location "#{@options[:group]}" in #{database}
-        end if)
+      %(set theGroup to create location "#{@options[:group]}" in #{database})
     end
   end
 
