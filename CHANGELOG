@@ -1,0 +1,26 @@
+### 1.0.15
+
+2025-02-11 05:02
+
+#### FIXED
+
+- When database is not set to global and group was set to inbox, entries were still going to global inbox
+
+### 1.0.14
+
+2025-02-09
+
+- Add debug and verbose options
+- Better search for existing notes (remove punctuation that breaks search)
+- Add --quiet option to suppress output
+- Highlight only selected text instead of whole paragraph
+- Sort highlights by position
+
+### 1.0.13
+
+2025-02-10:
+
+- Switch to using Marky the Markdownifier (v2) for article content
+  - fixes issues with non-ascii characters
+- Add --apply-tags option to apply tags from Readwise and Marky
+- fix highlighting with superscript
