@@ -670,7 +670,11 @@ class Import
   #   group # => Creates/gets "Research" group
   def group
     if !@options.key?(:group) || @options[:group] =~ /^inbox$/i
-      %(set theGroup to inbox)
+      if @options[:database] =~ /^global$/i
+        %(set theGroup to inbox)
+      else
+        %(set theGroup to (incoming group of #{database}))
+      end
     else
       %(set theGroup to create location "#{@options[:group]}" in #{database})
     end
