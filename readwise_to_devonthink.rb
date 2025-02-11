@@ -933,10 +933,6 @@ def parse_options(options)
       options[:token] = token
     end
 
-    opts.on('-t', '--type TYPE', 'Type of archive to save (markdown, bookmark, archive, pdf)') do |type|
-      options[:type] = type.normalize_type
-    end
-
     opts.on('-b', '--database DATABASE', 'Database to save to') do |db|
       options[:database] = db
     end
@@ -945,25 +941,36 @@ def parse_options(options)
       options[:group] = group
     end
 
+    opts.on('-t', '--type TYPE', 'Type of archive to save (markdown, bookmark, archive, pdf)') do |type|
+      options[:type] = type.normalize_type
+    end
+
     opts.on('--apply-tags', 'Apply tags from Marky generated markdown') do
       options[:apply_tags] = true
     end
 
+    opts.separator ''
+
     opts.on_tail('-d', '--debug', 'Turn on debugging output') do |d|
       Term.debug = 1 if Term.debug == 0
-    end
-
-    opts.on_tail('-v', '--verbose', 'Turn on verbose output') do |d|
-      Term.debug = 2
     end
 
     opts.on_tail('-q', '--quiet', 'Turn off all output') do
       Term.silent = true
     end
 
+    opts.on_tail('-v', '--verbose', 'Turn on verbose output') do |d|
+      Term.debug = 2
+    end
+
+    opts.on_tail('--version', 'Display version') do
+      puts "Readwise to DEVONthink v#{VERSION}"
+      exit
+    end
+
     opts.on_tail('-h', '--help', 'Show this help message') do
       puts opts
-      puts "\nConfiguration is defined at the top of #{File.expand_path(__FILE__)}"
+      puts "\nConfiguration can be defined in #{File.expand_path(CONFIG_FILE)}"
       exit
     end
   end
