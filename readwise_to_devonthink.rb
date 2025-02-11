@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 
-VERSION = '1.0.29'
+VERSION = '1.0.30'
 CONFIG_FILE = '~/.local/share/devonthink/rw2md.yaml'
 
 require 'English'
