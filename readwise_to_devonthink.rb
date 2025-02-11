@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 
 VERSION = '1.0.18'
+CONFIG_FILE = '~/.local/share/devonthink/rw2md.yaml'
 
 require 'English'
 require 'json'
@@ -10,33 +11,34 @@ require 'optparse'
 require 'net/http'
 require 'uri'
 require 'cgi'
+require 'yaml'
 
 # Reader articles with highlights become searchable text with annotations in DEVONthink.
-#
+
 # - Gets new highlights on schedule using launchd
 # - Adds Markdown file for urls, bookmarks for other types
 # - Adds finder comments and annotations with highlighted text and their notes and tags, with a link to the Reader highlight
 # - Highlights text in Markdown documents, full paragraph, using CriticMarkup
 # - Can merge new highlights
-#
+
 # ### Installation/Usage
-#
+
 # 1. Save script to disk
 # 2. Edit config options hash below with API key and preferences
 # 3. Make script executable, `chmod a+x /path/to/readwise_to_devonthink.rb`
 # 4. Run script once to get all previous highlights, `/path/to/readwise_to_devonthink.rb`
 # 5. Set up a launchd job to run script at desired interval
-#
+
 # ### Notes
-#
+
 # In lieu of setting config options in the script, you can pass them as command line options:
-#
+
 # - Pass the token with the `--token` option
 # - Pass the type with the `--type` option
 # - Pass database and group with `--database` and `--group` options
-#
+
 # ### Caveats
-#
+
 # - does not handle deletions
 # - does not highlight images
 
@@ -111,6 +113,13 @@ module Term
 
       warn message
     end
+  end
+end
+
+class ::Hash
+  # convert all keys to symbols
+  def symbolize_keys
+    each_with_object({}) { |(k, v), h| h[k.to_sym] = v }
   end
 end
 
@@ -988,6 +997,12 @@ end
 
 Term.debug = 0
 Term.silent = false
+
+if File.exist?(File.expand_path(CONFIG_FILE))
+  new_options = YAML.load_file(File.expand_path(CONFIG_FILE)).symbolize_keys
+  options.merge!(new_options)
+end
+
 options = parse_options(options)
 import = Import.new(options)
 import.save_all(options[:type])
