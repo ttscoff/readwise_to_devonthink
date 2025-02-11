@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 
-VERSION = '1.0.15'
+VERSION = '2.0.0'
 
 require 'English'
 require 'json'
