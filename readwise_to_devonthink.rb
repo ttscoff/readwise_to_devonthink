@@ -14,34 +14,11 @@ require 'cgi'
 require 'yaml'
 
 # Reader articles with highlights become searchable text with annotations in DEVONthink.
-
-# - Gets new highlights on schedule using launchd
-# - Adds Markdown file for urls, bookmarks for other types
-# - Adds finder comments and annotations with highlighted text and their notes and tags, with a link to the Reader highlight
-# - Highlights text in Markdown documents, full paragraph, using CriticMarkup
-# - Can merge new highlights
-
-# ### Installation/Usage
-
-# 1. Save script to disk
-# 2. Edit config options hash below with API key and preferences
-# 3. Make script executable, `chmod a+x /path/to/readwise_to_devonthink.rb`
-# 4. Run script once to get all previous highlights, `/path/to/readwise_to_devonthink.rb`
-# 5. Set up a launchd job to run script at desired interval
-
-# ### Notes
-
-# In lieu of setting config options in the script, you can pass them as command line options:
-
-# - Pass the token with the `--token` option
-# - Pass the type with the `--type` option
-# - Pass database and group with `--database` and `--group` options
-
-# ### Caveats
-
-# - does not handle deletions
-# - does not highlight images
-
+#
+# See [README.md] for installation, configuration, and usage
+#
+# [README.md]: https://gist.github.com/ttscoff/0a14fcd621526f1ab2ac6fa027df0dea#file-readme-md
+#
 options = {
   # Readwise API token, required, see <https://readwise.io/access_token>
   token: '░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░',

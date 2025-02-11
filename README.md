@@ -12,11 +12,13 @@ annotations in DEVONthink.
 
 ## Installation/Usage
 
-1. Save script to disk
-2. Edit config options hash in the script, external config file (see below) or pass as command line flags
+1. Save the [script][raw] to disk, or clone this gist and link the script into your $PATH
+2. Edit config options hash in the script, external config file (see below), or pass as command line flags
 3. Make script executable, `chmod a+x /path/to/readwise_to_devonthink.rb`
 4. Run script once to get all previous highlights, `/path/to/readwise_to_devonthink.rb`
 5. Set up a launchd job to run script at desired interval
+
+[raw]: https://gist.githubusercontent.com/ttscoff/0a14fcd621526f1ab2ac6fa027df0dea/raw/3f74ca4a6b0ecc3b7bc8a83dbd585e8b43217a74/readwise_to_devonthink.rb
 
 ### External configuration
 
@@ -28,7 +30,7 @@ You can also create a YAML file at `~/.local/share/devonthink/rw2dt.yaml` and in
 token: '░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░'
 # Type to save urls as, :markdown is default and preferred
 # Can also be :bookmark, :archive, or :pdf
-# Highlighting can only be done on :markdown types
+# Highlighting can only be done on :markdown type
 type: :markdown
 # Database name, global is default
 database: 'global'
@@ -52,7 +54,8 @@ file, you can pass them as command line flags:
 - Pass database and/or group with `--database` and `--group`
 
 Config options not passed on the command line will be read
-from the config file or the hash in the script (in that order).
+from the config file or the hash in the script (in that
+order).
 
 ### Caveats
 
