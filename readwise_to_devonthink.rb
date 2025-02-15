@@ -742,12 +742,14 @@ class Import
             set comment of theRecord to "#{annotation}"
 
             -- add an annotation link (same content as Finder comment)
-            set theAnnotation to annotation of theRecord
-			      if theAnnotation is not missing value then
-				      update record theAnnotation with text "#{annotation}" mode replacing
-			      else
-				      set annotation of theRecord to create record with {name:((name of theRecord) as string) & " (Annotation)", type:markdown, content:"#{annotation}"} in (annotations group of database of theRecord)
-            end if
+            set annotation of theRecord to create record with {name:((name of theRecord) as string) & " (Annotation)", type:markdown, content:"#{annotation}"} in (annotations group of database of theRecord)
+            ---- The following is for DT 4 when it's released
+            -- set theAnnotation to annotation of theRecord
+			      -- if theAnnotation is not missing value then
+				      -- update record theAnnotation with text "#{annotation}" mode replacing
+			      -- else
+				      -- set annotation of theRecord to create record with {name:((name of theRecord) as string) & " (Annotation)", type:markdown, content:"#{annotation}"} in (annotations group of database of theRecord)
+            -- end if
 
             -- add any Readwise document tags
             set AppleScript's text item delimiters to ","
