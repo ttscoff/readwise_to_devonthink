@@ -1,17 +1,17 @@
 #!/usr/bin/env ruby
 
-VERSION = '1.0.33'
-CONFIG_FILE = '~/.local/share/devonthink/rw2md.yaml'
+VERSION = "1.0.33"
+CONFIG_FILE = "~/.local/share/devonthink/rw2md.yaml"
 
-require 'English'
-require 'json'
-require 'date'
-require 'fileutils'
-require 'optparse'
-require 'net/http'
-require 'uri'
-require 'cgi'
-require 'yaml'
+require "English"
+require "json"
+require "date"
+require "fileutils"
+require "optparse"
+require "net/http"
+require "uri"
+require "cgi"
+require "yaml"
 
 # Reader articles with highlights become searchable text with annotations in DEVONthink.
 #
@@ -21,20 +21,20 @@ require 'yaml'
 #
 options = {
   # Readwise API token, required, see <https://readwise.io/access_token>
-  token: '░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░',
+  token: "░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░",
   # Type to save urls as, :markdown is default and preferred
   # Can also be :bookmark, :archive, or :pdf
   # Highlighting can only be done on :markdown types
   type: :markdown,
   # Database name, global is default
-  database: 'global',
+  database: "global",
   # Group name or inbox, inbox is default
-  group: 'inbox',
+  group: "inbox",
   # If true will apply tags found in Marky-generated markdown and Readwise document tags
-  apply_tags: true
+  apply_tags: true,
 }
 
-LAST_UPDATE = File.expand_path('~/.local/share/devonthink/readwise_last_update')
+LAST_UPDATE = File.expand_path("~/.local/share/devonthink/readwise_last_update")
 
 module Term
   class << self
@@ -52,10 +52,10 @@ module Term
 
     def debug=(level)
       @debug = if level >= 2
-                 2
-               else
-                 level
-               end
+          2
+        else
+          level
+        end
     end
 
     # Log a message with an optional verbose string
@@ -104,7 +104,7 @@ end
 class ::String
   # Remove all non-alphanumeric characters
   def no_punc
-    gsub(/[^a-z0-9 ]/i, ' ').gsub(/ +/, ' ').strip
+    gsub(/[^a-z0-9 ]/i, " ").gsub(/ +/, " ").strip
   end
 
   # Converts unicode escape sequences to their equivalent characters
@@ -118,11 +118,11 @@ class ::String
   #
   # @return [String] String with unicode sequences replaced
   def fix_unicode
-    gsub(/\\u2014/, '[-—]+')
-      .gsub(/\\u2018/, '‘')
-      .gsub(/\\u2019/, '’')
-      .gsub(/\\u201c/, '“')
-      .gsub(/\\u201d/, '”')
+    gsub(/\\u2014/, "[-—]+")
+      .gsub(/\\u2018/, "‘")
+      .gsub(/\\u2019/, "’")
+      .gsub(/\\u201c/, "“")
+      .gsub(/\\u201d/, "”")
   end
 
   # Make a very fuzzy search regex
@@ -131,9 +131,9 @@ class ::String
   # - Replace multiple wildcards with a single wildcard
   # @return [String] fuzzy search regex
   def greedy
-    gsub(/\(http.*?\)/, '!')
-      .gsub(/[^a-z0-9]+/i, '.*?')
-      .gsub(/(\.\*\? *)+/, '.*?')
+    gsub(/\(http.*?\)/, "!")
+      .gsub(/[^a-z0-9]+/i, ".*?")
+      .gsub(/(\.\*\? *)+/, ".*?")
   end
 
   # Make string searchable as regex
@@ -142,7 +142,7 @@ class ::String
   # - Replace multiple wildcards with a single wildcard
   def content_rx
     Regexp.escape(fix_unicode)
-          .gsub(%r{[^a-z0-9\-—‘’“”,!?:;.*()/\\\s]+}i, '.*?').gsub(/(\.\*\? *)+/, '.*?')
+          .gsub(%r{[^a-z0-9\-—‘’“”,!?:;.*()/\\\s]+}i, ".*?").gsub(/(\.\*\? *)+/, ".*?")
   end
 
   # Normalize type
@@ -177,7 +177,7 @@ class ::String
   #
   # @return [String] Markdown italicized text
   def italicize
-    split(/\n/).map { |s| s.strip.empty? ? '' : "_#{s}_" }.join("\n")
+    split(/\n/).map { |s| s.strip.empty? ? "" : "_#{s}_" }.join("\n")
   end
 
   #
@@ -186,7 +186,7 @@ class ::String
   # @return     [String] UTF-8 encoded string
   #
   def scrub
-    encode('utf-16', invalid: :replace).encode('utf-8')
+    encode("utf-16", invalid: :replace).encode("utf-8")
   end
 
   #
@@ -212,27 +212,27 @@ class ::String
     encoding_options = {
       invalid: :replace, # Replace invalid byte sequences
       undef: :replace, # Replace anything not defined in ASCII
-      replace: '', # Use a blank for those replacements
-      universal_newline: true # Always break lines with \n
+      replace: "", # Use a blank for those replacements
+      universal_newline: true, # Always break lines with \n
     }
 
-    gsub(/[\u0080-\u00ff]/, '')
-      .gsub(/[—–]/, '-')
+    gsub(/[\u0080-\u00ff]/, "")
+      .gsub(/[—–]/, "-")
       .gsub(/[“”]/, '"')
       .gsub(/[‘’]/, "'")
-      .gsub(/…/, '...')
+      .gsub(/…/, "...")
       .gsub(/[\u2018-\u2019]/, "'")
       .gsub(/[\u201C-\u201D]/, '"')
-      .gsub(/\u2026/, '...')
-      .gsub(/\u00A0/, ' ')
-      .gsub(/\u00A9/, '(c)')
-      .gsub(/\u00AE/, '(r)')
-      .gsub(/\u2122/, '(tm)')
-      .gsub(/\u2014/, '--')
-      .gsub(/\u2015/, '---')
-      .gsub(/\u2010/, '-')
-      .gsub(/[\u2011-\u2012]/, '-')
-      .encode(Encoding.find('ASCII'), **encoding_options)
+      .gsub(/\u2026/, "...")
+      .gsub(/\u00A0/, " ")
+      .gsub(/\u00A9/, "(c)")
+      .gsub(/\u00AE/, "(r)")
+      .gsub(/\u2122/, "(tm)")
+      .gsub(/\u2014/, "--")
+      .gsub(/\u2015/, "---")
+      .gsub(/\u2010/, "-")
+      .gsub(/[\u2011-\u2012]/, "-")
+      .encode(Encoding.find("ASCII"), **encoding_options)
       .chars.reject { |char| char.ascii_only? && (char.ord < 32 || char.ord == 127) }.join
   end
 
@@ -254,8 +254,8 @@ class ::String
       .gsub(/(\*+)(.*?)\1/, '\2')
       .gsub(/(_+)(.*?)\1/, '\2')
       .strip_sup
-      .gsub(/^#+ */, '')
-      .gsub(/^(> *)+/, '')
+      .gsub(/^#+ */, "")
+      .gsub(/^(> *)+/, "")
   end
 
   # Check if a line matches any of the highlights
@@ -287,7 +287,7 @@ class ::String
   # @note Strips existing highlight markers if present
   def highlight(highlight)
     rx = /(\{==)?\[?#{highlight.text.strip_markdown.fix_unicode.greedy}[.?!;:]*([\])][\[(].*?[)\]])?(==\})?[.?!;:]*/im
-    strip_sup.gsub(/(\{==|==\})/, '').gsub(rx, '{==\0==}')
+    strip_sup.gsub(/(\{==|==\})/, "").gsub(rx, '{==\0==}')
     # "{==#{gsub(/(\{==|==\})/, '')}==}"
     # if (highlight.note && !highlight.note.whitespace_only?) || (highlight.tags && !highlight.tags.empty?)
     #   comment = []
@@ -309,10 +309,10 @@ class ::String
     lines.each do |line|
       m = line.matches_highlight(highlights)
       output << if m && !line.whitespace_only?
-                  line.highlight(highlights[m])
-                else
-                  line
-                end
+        line.highlight(highlights[m])
+      else
+        line
+      end
     end
 
     output.join("\n")
@@ -329,7 +329,7 @@ class ::String
   #
   # @return [String] Markdown italicized text
   def italicize
-    split(/\n/).map { |s| s.strip.empty? ? '' : "_#{s}_" }.join("\n")
+    split(/\n/).map { |s| s.strip.empty? ? "" : "_#{s}_" }.join("\n")
   end
 
   # Test if a string is empty or whitespace only
@@ -446,7 +446,7 @@ class Tags < Array
     return nil if tags.nil?
 
     tags.each do |tag|
-      push(tag['name'])
+      push(tag["name"])
     end
   end
 
@@ -460,7 +460,7 @@ class Tags < Array
   # @example Convert empty array
   #   [].to_as #=> ''
   def to_as
-    empty? ? '' : join(',')
+    empty? ? "" : join(",")
   end
 
   # Converts array of tags to hashtag format
@@ -470,7 +470,7 @@ class Tags < Array
   #   ['code', 'ruby'].to_hashtags #=> "#code #ruby"
   #   [].to_hashtags #=> ""
   def to_hashtags
-    empty? ? '' : map { |tag| "##{tag}" }.join(' ')
+    empty? ? "" : map { |tag| "##{tag}" }.join(" ")
   end
 end
 
@@ -544,14 +544,14 @@ class Import
   #   extract_highlights(result) #=> [#<Highlight:...>]
   def extract_highlights(result)
     highlights = []
-    result['highlights'].each do |highlight|
-      next if highlight['is_deleted']
+    result["highlights"].each do |highlight|
+      next if highlight["is_deleted"]
 
-      highlights << Highlight.new({ text: highlight['text'].scrub,
-                                    note: highlight['note'].scrub,
+      highlights << Highlight.new({ text: highlight["text"].scrub,
+                                    note: highlight["note"].scrub,
                                     tags: Tags.new(highlight[:tags]),
-                                    location: highlight['location'],
-                                    url: highlight['url'] })
+                                    location: highlight["location"],
+                                    url: highlight["url"] })
     end
 
     highlights.sort_by { |h| h.location }
@@ -575,29 +575,29 @@ class Import
   # - summary: Content summary if available
   def fetch_highlights
     bookmarks = []
-    after = last_update ? "?updatedAfter=#{last_update}" : ''
+    after = last_update ? "?updatedAfter=#{last_update}" : ""
 
     res = `curl -SsL -H "Authorization: Token #{@options[:token]}" https://readwise.io/api/v2/export#{after}`
     data = JSON.parse(res)
-    Term.log("#{data['results'].count} new highlights", level: :info)
-    data['results'].each do |result|
+    Term.log("#{data["results"].count} new highlights", level: :info)
+    data["results"].each do |result|
       type = :article
-      url = result['source_url']
+      url = result["source_url"]
       if url =~ /^mailto:/
-        url = result['unique_url']
+        url = result["unique_url"]
         type = :email
       elsif url =~ /^private:/
-        url = result['unique_url']
+        url = result["unique_url"]
         type = :book
       end
-      title = result['readable_title'].ascii.scrub.strip
-      author = result['author']
-      image = result['cover_image_url']
-      doc_note = result['document_note'] ? "**Note:** #{result['document_note'].italicize}" : ''
-      tags = Tags.new(result['book_tags'])
+      title = result["readable_title"].ascii.scrub.strip
+      author = result["author"]
+      image = result["cover_image_url"]
+      doc_note = result["document_note"] ? "**Note:** #{result["document_note"].italicize}" : ""
+      tags = Tags.new(result["book_tags"])
       highlights = extract_highlights(result)
       annotation = "### Highlights\n\n#{highlights.map(&:to_md).join("\n\n")}"
-      summary = result['summary'] ? "**Summary**: #{result['summary']}" : ''
+      summary = result["summary"] ? "**Summary**: #{result["summary"]}" : ""
       bookmarks << Bookmark.new({ url: url,
                                   type: type,
                                   title: title,
@@ -614,7 +614,7 @@ class Import
 
     bookmarks
   rescue StandardError => e
-    Term.log('Error fetching bookmark JSON', e, level: :error)
+    Term.log("Error fetching bookmark JSON", e, level: :error)
   end
 
   # Returns the DevonThink database target as an AppleScript string
@@ -623,7 +623,7 @@ class Import
   #                  otherwise returns 'database "[name]"' command string
   def database
     if !@options.key?(:database) || @options[:database] =~ /^global$/i
-      'inbox'
+      "inbox"
     else
       %(database "#{@options[:database]}")
     end
@@ -677,29 +677,29 @@ class Import
       cmd = %(set theRecord to create record with {name:"#{name}", type:bookmark, URL:"#{bookmark.url}"} in theGroup)
     else
       cmd = case type
-            when :markdown
-              path = path_for_title(bookmark.title)
-              if path
-                if @options[:apply_tags]
-                  tags = IO.read(path).match(/^tags: (.*?)$/)&.captures&.first || ''
-                  @marky_tags = tags.split(',').map(&:strip)
-                end
-                ''
-              else
-                content = marky(bookmark.url)
-                if @options[:apply_tags]
-                  tags = content.match(/^tags: (.*?)$/)&.captures&.first || ''
-                  @marky_tags = tags.split(',').map(&:strip)
-                end
-                %(set theRecord to create record with {name:"#{name}", type:markdown, URL:"#{bookmark.url}", content:"#{content.e_as}"} in theGroup)
-              end
-            when :bookmark
-              %(set theRecord to create record with {name:"#{name}", type:bookmark, URL:"#{bookmark.url}"} in theGroup)
-            when :archive
-              %(set theRecord to create web document from "#{bookmark.url}" readability true name "#{name}" in theGroup )
-            when :pdf
-              %(set theRecord to create PDF document from "#{bookmark.url}" pagination true readability true name "#{name}" in theGroup)
+        when :markdown
+          path = path_for_title(bookmark.title)
+          if path
+            if @options[:apply_tags]
+              tags = IO.read(path).match(/^tags: (.*?)$/)&.captures&.first || ""
+              @marky_tags = tags.split(",").map(&:strip)
             end
+            ""
+          else
+            content = marky(bookmark.url)
+            if @options[:apply_tags]
+              tags = content.match(/^tags: (.*?)$/)&.captures&.first || ""
+              @marky_tags = tags.split(",").map(&:strip)
+            end
+            %(set theRecord to create record with {name:"#{name}", type:markdown, URL:"#{bookmark.url}", content:"#{content.e_as}"} in theGroup)
+          end
+        when :bookmark
+          %(set theRecord to create record with {name:"#{name}", type:bookmark, URL:"#{bookmark.url}"} in theGroup)
+        when :archive
+          %(set theRecord to create web document from "#{bookmark.url}" readability true name "#{name}" in theGroup )
+        when :pdf
+          %(set theRecord to create PDF document from "#{bookmark.url}" pagination true readability true name "#{name}" in theGroup)
+        end
     end
   end
 
@@ -712,7 +712,7 @@ class Import
     name = bookmark.title.e_as
     annotation = [bookmark.summary, bookmark.doc_note, bookmark.annotation].delete_if(&:empty?).join("\n\n").e_as
     bookmark.tags.concat(@marky_tags) if @marky_tags
-    tags = @options[:apply_tags] ? bookmark.tags.to_as : ''
+    tags = @options[:apply_tags] ? bookmark.tags.to_as : ""
 
     cmd = command_for_type(type, bookmark)
 
@@ -742,14 +742,10 @@ class Import
             set comment of theRecord to "#{annotation}"
 
             -- add an annotation link (same content as Finder comment)
-            set annotation of theRecord to create record with {name:((name of theRecord) as string) & " (Annotation)", type:markdown, content:"#{annotation}"} in (annotations group of database of theRecord)
-            ---- The following is for DT 4 when it's released
-            -- set theAnnotation to annotation of theRecord
-			      -- if theAnnotation is not missing value then
-				      -- update record theAnnotation with text "#{annotation}" mode replacing
-			      -- else
-				      -- set annotation of theRecord to create record with {name:((name of theRecord) as string) & " (Annotation)", type:markdown, content:"#{annotation}"} in (annotations group of database of theRecord)
-            -- end if
+            try
+              set annotation of theRecord to create record with {name:((name of theRecord) as string) & " (Annotation)", type:markdown, content:"#{annotation}"} in (annotations group of database of theRecord)
+            end try
+
 
             -- add any Readwise document tags
             set AppleScript's text item delimiters to ","
@@ -791,7 +787,11 @@ APPLESCRIPT`
         set searchResults to search "name:\\"#{title.no_punc.e_as}\\"" in theGroup
         if searchResults is not {} then
           set theRecord to item 1 of searchResults
-          return plain text of (annotation of theRecord)
+          try
+            return plain text of (annotation of theRecord)
+          on error
+            return ""
+          end try
         end if
       end tell)
 
@@ -904,7 +904,7 @@ APPLESCRIPT`
       last = IO.read(LAST_UPDATE).strip
       last.whitespace_only? ? nil : last
     else
-      Term.log('Last update record does not exist', level: :info)
+      Term.log("Last update record does not exist", level: :info)
       nil
     end
   end
@@ -919,11 +919,11 @@ APPLESCRIPT`
   def save_last_update
     FileUtils.mkdir_p(File.dirname(LAST_UPDATE)) unless File.directory?(File.dirname(LAST_UPDATE))
 
-    date = Time.now.strftime('%Y-%m-%dT%H:%M:%S.%L%z')
+    date = Time.now.strftime("%Y-%m-%dT%H:%M:%S.%L%z")
     File.write(LAST_UPDATE, date)
     Term.log("Saved last update: #{date}", level: :info)
   rescue StandardError => e
-    Term.log('Error saving last update', e, level: :error)
+    Term.log("Error saving last update", e, level: :error)
   end
 end
 
@@ -931,46 +931,46 @@ def parse_options(options)
   opt_parser = OptionParser.new do |opts|
     opts.banner = "Usage: #{File.basename($PROGRAM_NAME)} [options]"
 
-    opts.on('--token TOKEN', 'Readwise API token') do |token|
+    opts.on("--token TOKEN", "Readwise API token") do |token|
       options[:token] = token
     end
 
-    opts.on('-b', '--database DATABASE', 'Database to save to') do |db|
+    opts.on("-b", "--database DATABASE", "Database to save to") do |db|
       options[:database] = db
     end
 
-    opts.on('-g', '--group GROUP', 'Group to save to') do |group|
+    opts.on("-g", "--group GROUP", "Group to save to") do |group|
       options[:group] = group
     end
 
-    opts.on('-t', '--type TYPE', 'Type of archive to save (markdown, bookmark, archive, pdf)') do |type|
+    opts.on("-t", "--type TYPE", "Type of archive to save (markdown, bookmark, archive, pdf)") do |type|
       options[:type] = type.normalize_type
     end
 
-    opts.on('--apply-tags', 'Apply tags from Marky generated markdown') do
+    opts.on("--apply-tags", "Apply tags from Marky generated markdown") do
       options[:apply_tags] = true
     end
 
-    opts.separator ''
+    opts.separator ""
 
-    opts.on_tail('-d', '--debug', 'Turn on debugging output') do |d|
+    opts.on_tail("-d", "--debug", "Turn on debugging output") do |d|
       Term.debug = 1 if Term.debug == 0
     end
 
-    opts.on_tail('-q', '--quiet', 'Turn off all output') do
+    opts.on_tail("-q", "--quiet", "Turn off all output") do
       Term.silent = true
     end
 
-    opts.on_tail('-v', '--verbose', 'Turn on verbose output') do |d|
+    opts.on_tail("-v", "--verbose", "Turn on verbose output") do |d|
       Term.debug = 2
     end
 
-    opts.on_tail('--version', 'Display version') do
+    opts.on_tail("--version", "Display version") do
       puts "Readwise to DEVONthink v#{VERSION}"
       exit
     end
 
-    opts.on_tail('-h', '--help', 'Show this help message') do
+    opts.on_tail("-h", "--help", "Show this help message") do
       puts opts
       puts "\nConfiguration can be defined in #{File.expand_path(CONFIG_FILE)}"
       exit
