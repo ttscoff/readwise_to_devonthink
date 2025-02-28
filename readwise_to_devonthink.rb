@@ -718,7 +718,7 @@ class Import
 
     existing_annotation = annotation_for_title(bookmark.title)
 
-    annotation = annotation.merge(existing_annotation.e_as) unless existing_annotation.empty?
+    annotation = annotation.merge(existing_annotation.e_as) if existing_annotation && !existing_annotation.empty?
 
     cmd = %(tell application id "DNtp"
             #{group}
