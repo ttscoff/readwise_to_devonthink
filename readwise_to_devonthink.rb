@@ -1,8 +1,8 @@
 #!/usr/bin/env ruby
 
-DEBUG = ENV["READWISE_DEBUG"] ? true : false
+VERSION = "1.0.34"
 
-VERSION = '1.0.34'
+DEBUG = ENV["READWISE_DEBUG"] ? true : false
 CONFIG_FILE = DEBUG ? "~/.local/share/devonthink/rw2dt-debug.yaml" : "~/.local/share/devonthink/rw2md.yaml"
 
 require "English"
@@ -288,7 +288,7 @@ class ::String
   #   # => "{==some text==}"
   # @note Strips existing highlight markers if present
   def highlight(highlight)
-    rx = /(\{==)?(<[^\/].*?>)*\[?#{highlight.text.strip_markdown.fix_unicode.greedy}[.?!;:""]*([\])][\[(].*?[)\]])?(==\})?([.?!;:""]|<\/.*?>)*/im
+    rx = /(\{==)?([*_"'\[(]|<[^\/].*?>)*\[?#{highlight.text.strip_markdown.fix_unicode.greedy}[.?!;:"'*_]*([\])][\[(].*?[)\]])?(==\})?([.?!;:"'*_]|<\/.*?>)*/im
     strip_sup.gsub(/(\{==|==\})/, "").gsub(rx, '{==\0==}')
     # "{==#{gsub(/(\{==|==\})/, '')}==}"
     # if (highlight.note && !highlight.note.whitespace_only?) || (highlight.tags && !highlight.tags.empty?)
