@@ -22,7 +22,7 @@ annotations in DEVONthink.
 
 ### External configuration
 
-You can also create a YAML file at `~/.local/share/devonthink/rw2dt.yaml` and include the config options:
+You can also create a YAML file at `~/.local/share/devonthink/rw2md.yaml` and include the config options:
 
 ```yaml
 ---
