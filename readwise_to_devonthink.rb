@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 
-VERSION = '1.0.36'
+VERSION = "1.0.36"
 
 DEBUG = ENV["READWISE_DEBUG"] ? true : false
 CONFIG_FILE = DEBUG ? "~/.local/share/devonthink/rw2md-debug.yaml" : "~/.local/share/devonthink/rw2md.yaml"
@@ -268,7 +268,7 @@ class ::String
   def matches_highlight(highlights)
     matches = false
     highlights.each_with_index do |highlight, i|
-      next if highlight.text.scrub.strip_markdown.empty?
+      next if highlight.nil? || !highlight.text.scrub.strip_markdown.empty?
 
       if strip_markdown =~ /#{highlight.text.strip_markdown.fix_unicode.greedy}/
         matches = i
