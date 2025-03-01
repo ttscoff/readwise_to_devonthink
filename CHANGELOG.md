@@ -1,3 +1,11 @@
+### 1.0.36
+
+2025-03-01 08:23
+
+#### FIXED
+
+- Group should be set to incoming not inbox
+
 ### 1.0.35
 
 2025-03-01 07:17
