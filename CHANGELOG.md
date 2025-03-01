@@ -1,3 +1,11 @@
+### 1.0.35
+
+2025-03-01 07:17
+
+#### IMPROVED
+
+- Further improve highlighter regex
+
 ### 1.0.34
 
 2025-03-01 06:47
