@@ -1,9 +1,9 @@
 #!/usr/bin/env ruby
 
-VERSION = '1.0.35'
+VERSION = "1.0.35"
 
 DEBUG = ENV["READWISE_DEBUG"] ? true : false
-CONFIG_FILE = DEBUG ? "~/.local/share/devonthink/rw2dt-debug.yaml" : "~/.local/share/devonthink/rw2md.yaml"
+CONFIG_FILE = DEBUG ? "~/.local/share/devonthink/rw2md-debug.yaml" : "~/.local/share/devonthink/rw2md.yaml"
 
 require "English"
 require "json"
@@ -647,7 +647,7 @@ class Import
   def group
     if !@options.key?(:group) || @options[:group] =~ /^inbox$/i
       if @options[:database] =~ /^global$/i
-        %(set theGroup to inbox)
+        %(set theGroup to incoming group)
       else
         %(set theGroup to (incoming group of #{database}))
       end
@@ -848,7 +848,7 @@ APPLESCRIPT`
     if path
       IO.read(path.strip)
     else
-      Term.log("Error getting content for #{title}", cmd, level: :error)
+      Term.log("Error getting content for #{title}", path, level: :error)
       false
     end
   end
