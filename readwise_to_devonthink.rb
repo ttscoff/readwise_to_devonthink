@@ -2,7 +2,7 @@
 
 DEBUG = ENV["READWISE_DEBUG"] ? true : false
 
-VERSION = "1.0.33"
+VERSION = '1.0.34'
 CONFIG_FILE = DEBUG ? "~/.local/share/devonthink/rw2dt-debug.yaml" : "~/.local/share/devonthink/rw2md.yaml"
 
 require "English"
