@@ -1,5 +1,9 @@
 # Readwise to DEVONthink
 
+![Banner Image][banner]
+
+[banner]: https://cdn3.brettterpstra.com/uploads/2025/02/readwise_devonthink-rb@2x.7462.avif
+
 [![License: MIT][mitshield]][mit]
 
 [mitshield]: https://img.shields.io/badge/License-MIT-yellow.svg
