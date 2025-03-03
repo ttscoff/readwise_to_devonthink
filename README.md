@@ -84,7 +84,7 @@ If you run into issues, please follow these steps
 2. Set the clock back by editing `~/.local/share/devonthink/readwise_last_update` to a time that will include your last highlight, or to the problematic highlight if the issue is with a particular highlight. Repeat this step as needed until you can replicate the issue.
 3. Run `readwise_to_devonthink.rb -v` to get verbose output.
 4. Copy the output from step 3 to a private gist, or to a text file you can attach to a forum post.
-5. Share the gist in the comments [here](https://gist.github.com/ttscoff/0a14fcd621526f1ab2ac6fa027df0dea), or create a post on <https://forum.brettterpstra.com> and attach the text file there.
+5. Share the gist in the Issues [here](https://github.com/ttscoff/readwise_to_devonthink/issues), or create a post on <https://forum.brettterpstra.com> and attach the text file there.
 
 **NOTE:** The verbose output will likely contain the content of the highlight or the entire Markdown content of the highlighted page/text. If this is private for any reason, [share it with me privately](https://brettterpstra.com/contact/), or try to replicate the issue with non-private content and redact the output as needed.
 
