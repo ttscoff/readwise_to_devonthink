@@ -1,19 +1,7 @@
 #!/usr/bin/env ruby
+# frozen_string_literal: true
 
 VERSION = "1.0.37"
-
-DEBUG = ENV["READWISE_DEBUG"] ? true : false
-CONFIG_FILE = DEBUG ? "~/.local/share/devonthink/rw2md-debug.yaml" : "~/.local/share/devonthink/rw2md.yaml"
-
-require "English"
-require "json"
-require "date"
-require "fileutils"
-require "optparse"
-require "net/http"
-require "uri"
-require "cgi"
-require "yaml"
 
 # Reader articles with highlights become searchable text with annotations in DEVONthink.
 #
@@ -33,11 +21,25 @@ options = {
   # Group name or inbox, inbox is default
   group: "inbox",
   # If true will apply tags found in Marky-generated markdown and Readwise document tags
-  apply_tags: true,
+  apply_tags: true
 }
+
+DEBUG = ENV["READWISE_DEBUG"] ? true : false
+CONFIG_FILE = DEBUG ? "~/.local/share/devonthink/rw2md-debug.yaml" : "~/.local/share/devonthink/rw2md.yaml"
+
+require "English"
+require "json"
+require "date"
+require "fileutils"
+require "optparse"
+require "net/http"
+require "uri"
+require "cgi"
+require "yaml"
 
 LAST_UPDATE = File.expand_path("~/.local/share/devonthink/readwise_last_update")
 
+# Terminal functions
 module Term
   class << self
     def silent
@@ -53,11 +55,7 @@ module Term
     end
 
     def debug=(level)
-      @debug = if level >= 2
-          2
-        else
-          level
-        end
+      @debug = [level, 2].min
     end
 
     # Log a message with an optional verbose string
@@ -70,7 +68,7 @@ module Term
     #   log("Process complete", level: :info)
     #   log("Failed to connect", "Connection timeout after 30s", level: :error)
     def log(message = nil, verbose = nil, level: :info)
-      return if debug == 0
+      return if debug.zero?
 
       if message
         case level
@@ -90,15 +88,16 @@ module Term
     def stderr(message)
       return if silent
 
-      warn message
+      $stderr.puts message
     end
   end
 end
 
+# Hash extensions
 class ::Hash
   # convert all keys to symbols
   def symbolize_keys
-    each_with_object({}) { |(k, v), h| h[k.to_sym] = v }
+    transform_keys(&:to_sym)
   end
 end
 
@@ -120,11 +119,12 @@ class ::String
   #
   # @return [String] String with unicode sequences replaced
   def fix_unicode
-    gsub(/\\u2014/, "[-—]+")
-      .gsub(/\\u2018/, "‘")
-      .gsub(/\\u2019/, "’")
-      .gsub(/\\u201c/, "“")
-      .gsub(/\\u201d/, "”")
+    gsub("\\u2014", "[-—]+")
+      .gsub("\\u2018", "‘")
+      .gsub("\\u2019", "’")
+      .gsub("\\u201c", "“")
+      .gsub("\\u201d", "”")
+      .gsub("\\u2026", "…")
   end
 
   # Make a very fuzzy search regex
@@ -172,14 +172,14 @@ class ::String
   #
   # @return [String] Markdown blockquote
   def block_quote
-    split(/\n/).map { |s| "> #{s}" }.join("\n")
+    split("\n").map { |s| "> #{s}" }.join("\n")
   end
 
   # Convert to Markdown italicized text, line by line
   #
   # @return [String] Markdown italicized text
   def italicize
-    split(/\n/).map { |s| s.strip.empty? ? "" : "_#{s}_" }.join("\n")
+    split("\n").map { |s| s.strip.empty? ? "" : "_#{s}_" }.join("\n")
   end
 
   #
@@ -215,7 +215,7 @@ class ::String
       invalid: :replace, # Replace invalid byte sequences
       undef: :replace, # Replace anything not defined in ASCII
       replace: "", # Use a blank for those replacements
-      universal_newline: true, # Always break lines with \n
+      universal_newline: true # Always break lines with \n
     }
 
     gsub(/[\u0080-\u00ff]/, "")
@@ -225,14 +225,14 @@ class ::String
       .gsub(/…/, "...")
       .gsub(/[\u2018-\u2019]/, "'")
       .gsub(/[\u201C-\u201D]/, '"')
-      .gsub(/\u2026/, "...")
-      .gsub(/\u00A0/, " ")
-      .gsub(/\u00A9/, "(c)")
-      .gsub(/\u00AE/, "(r)")
-      .gsub(/\u2122/, "(tm)")
-      .gsub(/\u2014/, "--")
-      .gsub(/\u2015/, "---")
-      .gsub(/\u2010/, "-")
+      .gsub("\u2026", "...")
+      .gsub("\u00A0", " ")
+      .gsub("\u00A9", "(c)")
+      .gsub("\u00AE", "(r)")
+      .gsub("\u2122", "(tm)")
+      .gsub("\u2014", "--")
+      .gsub("\u2015", "---")
+      .gsub("\u2010", "-")
       .gsub(/[\u2011-\u2012]/, "-")
       .encode(Encoding.find("ASCII"), **encoding_options)
       .chars.reject { |char| char.ascii_only? && (char.ord < 32 || char.ord == 127) }.join
@@ -288,7 +288,7 @@ class ::String
   #   # => "{==some text==}"
   # @note Strips existing highlight markers if present
   def highlight(highlight)
-    rx = /(\{==)?([*_"'\[(]|<[^\/].*?>)*\[?#{highlight.text.strip_markdown.fix_unicode.greedy}[.?!;:"'*_]*([\])][\[(].*?[)\]])?(==\})?([.?!;:"'*_]|<\/.*?>)*/im
+    rx = %r{(\{==)?([*_"\[(]|<[^/].*?>)*\[?#{highlight.text.strip_markdown.fix_unicode.greedy}[.?!;:"*_]*([\])][\[(].*?[)\]])?(==\})?([.?!;:"*_]|</.*?>)*}im
     strip_sup.gsub(/(\{==|==\})/, "").gsub(rx, '{==\0==}')
     # "{==#{gsub(/(\{==|==\})/, '')}==}"
     # if (highlight.note && !highlight.note.whitespace_only?) || (highlight.tags && !highlight.tags.empty?)
@@ -306,32 +306,18 @@ class ::String
   # @param highlights [Array<Hash>] An array of Highlight objects
   # @return [String] The text with highlighting applied, lines joined with newlines
   def highlight_markdown(highlights)
-    lines = dup.scrub.split(/\n/)
+    lines = dup.scrub.split("\n")
     output = []
     lines.each do |line|
       m = line.matches_highlight(highlights)
       output << if m && !line.whitespace_only?
-        line.highlight(highlights[m])
-      else
-        line
-      end
+                  line.highlight(highlights[m])
+                else
+                  line
+                end
     end
 
     output.join("\n")
-  end
-
-  # Convert to Markdown blockquote
-  #
-  # @return [String] Markdown blockquote
-  def block_quote
-    split(/\n/).map { |s| "> #{s}" }.join("\n")
-  end
-
-  # Convert to Markdown italicized text, line by line
-  #
-  # @return [String] Markdown italicized text
-  def italicize
-    split(/\n/).map { |s| s.strip.empty? ? "" : "_#{s}_" }.join("\n")
   end
 
   # Test if a string is empty or whitespace only
@@ -345,8 +331,8 @@ class ::String
   #
   # @return [String] merged string
   def merge(other)
-    mine = split(/\n/).delete_if(&:whitespace_only?)
-    other = other.split(/\n/).delete_if(&:whitespace_only?)
+    mine = split("\n").delete_if(&:whitespace_only?)
+    other = other.split("\n").delete_if(&:whitespace_only?)
 
     other.each do |line|
       mine << line unless mine.include?(line)
@@ -372,12 +358,13 @@ class ::String
       offset[unit] = num.to_i
     end
 
-    total_seconds = offset["d"] * 24 * 60 * 60 + offset["h"] * 60 * 60 + offset["m"] * 60
+    total_seconds = (offset["d"] * 24 * 60 * 60) + (offset["h"] * 60 * 60) + (offset["m"] * 60)
 
-    (now - total_seconds / (24 * 60 * 60.0)).strftime("%Y-%m-%dT%H:%M:%S.%L%z")
+    (now - (total_seconds / (24 * 60 * 60.0))).strftime("%Y-%m-%dT%H:%M:%S.%L%z")
   end
 end
 
+# An individual highlight
 class Highlight
   attr_reader :text, :note, :tags, :location, :url
 
@@ -467,7 +454,7 @@ class Tags < Array
   # @return [self] otherwise
   def initialize(tags)
     super()
-    return nil if tags.nil?
+    return if tags.nil?
 
     tags.each do |tag|
       push(tag["name"])
@@ -484,7 +471,7 @@ class Tags < Array
   # @example Convert empty array
   #   [].to_as #=> ''
   def to_as
-    empty? ? "" : join(",")
+    empty? ? "{}" : "{#{map { |tag| %("#{tag}") }.join(",")}}"
   end
 
   # Converts array of tags to hashtag format
@@ -499,12 +486,31 @@ class Tags < Array
 end
 
 # Import bookmarks from a folder
-
 class Import
   # Initializes a new instance of the class
   #
   # @param options [Hash] Configuration options for processing highlights
-  # @return [void]
+  #
+  # @option options [String] :token Readwise API token
+  # @option options [String] :database DevonThink database name
+  # @option options [String] :group DevonThink group name
+  # @option options [Boolean] :apply_tags Whether to apply tags from Marky-generated markdown
+  # @option options [Symbol] :type Type of archive to save (:markdown, :bookmark, :archive, :pdf)
+  # @option options [String] :back Interval to check for new highlights
+  #
+  # @return [Import] A new instance of the Import class
+  #
+  # @example
+  #   options = {
+  #     token: "your_token",
+  #     database: "your_database",
+  #     group: "your_group",
+  #     apply_tags: true,
+  #     type: :markdown,
+  #     back: "1d"
+  #   }
+  #
+  #   import = Import.new(options)
   def initialize(options)
     @options = options
     @bookmarks = fetch_highlights
@@ -514,9 +520,11 @@ class Import
   # @param type [Symbol] type of archive to save
   #
   # @return [Array] success status
-  def save_all(type = :markdown)
+  def save_all
+    type = @options[:type] || :markdown
+
     @bookmarks.map do |bookmark|
-      save_to_dt(type, bookmark)
+      save_to_dt(bookmark, type)
     end
 
     sleep 5
@@ -531,6 +539,25 @@ class Import
   end
 
   private
+
+  # Return Version of DEVONthink
+  def version
+    @version ||= check_version
+  end
+
+  # Check DEVONthink version
+  # @return [Integer] version number as integer
+  def check_version
+    v = `osascript -e 'tell application id "DNtp" to version as string'`.strip
+    case v
+    when /^3/
+      3
+    when /^4/
+      4
+    else
+      log "Unknown DEVONthink version #{v}", level: :error
+    end
+  end
 
   # Test if URL result is meta redirect
   #
@@ -578,7 +605,7 @@ class Import
                                     url: highlight["url"] })
     end
 
-    highlights.sort_by { |h| h.location }
+    highlights.sort_by(&:location)
   end
 
   # Fetches reading highlights from Readwise API and converts them to bookmarks
@@ -697,33 +724,33 @@ class Import
   def command_for_type(type, bookmark)
     name = bookmark.title.e_as
 
-    if bookmark.type != :article
-      cmd = %(set theRecord to create record with {name:"#{name}", type:bookmark, URL:"#{bookmark.url}"} in theGroup)
-    else
-      cmd = case type
-        when :markdown
-          path = path_for_title(bookmark.title)
-          if path
-            if @options[:apply_tags]
-              tags = IO.read(path).match(/^tags: (.*?)$/)&.captures&.first || ""
-              @marky_tags = tags.split(",").map(&:strip)
-            end
-            ""
-          else
-            content = marky(bookmark.url)
-            if @options[:apply_tags]
-              tags = content.match(/^tags: (.*?)$/)&.captures&.first || ""
-              @marky_tags = tags.split(",").map(&:strip)
-            end
-            %(set theRecord to create record with {name:"#{name}", type:markdown, URL:"#{bookmark.url}", content:"#{content.e_as}"} in theGroup)
+    if bookmark.type == :article
+      case type
+      when :markdown
+        path = path_for_title(bookmark.title)
+        if path
+          if @options[:apply_tags]
+            tags = File.read(path).match(/^tags: (.*?)$/)&.captures&.first || ""
+            @marky_tags = tags.split(",").map(&:strip)
           end
-        when :bookmark
-          %(set theRecord to create record with {name:"#{name}", type:bookmark, URL:"#{bookmark.url}"} in theGroup)
-        when :archive
-          %(set theRecord to create web document from "#{bookmark.url}" readability true name "#{name}" in theGroup )
-        when :pdf
-          %(set theRecord to create PDF document from "#{bookmark.url}" pagination true readability true name "#{name}" in theGroup)
+          ""
+        else
+          content = marky(bookmark.url)
+          if @options[:apply_tags]
+            tags = content.match(/^tags: (.*?)$/)&.captures&.first || ""
+            @marky_tags = tags.split(",").map(&:strip)
+          end
+          %(set theRecord to create record with {name:"#{name}", type:markdown, URL:"#{bookmark.url}", content:"#{content.e_as}"} in theGroup)
         end
+      when :bookmark
+        %(set theRecord to create record with {name:"#{name}", type:bookmark, URL:"#{bookmark.url}"} in theGroup)
+      when :archive
+        %(set theRecord to create web document from "#{bookmark.url}" readability true name "#{name}" in theGroup )
+      when :pdf
+        %(set theRecord to create PDF document from "#{bookmark.url}" pagination true readability true name "#{name}" in theGroup)
+      end
+    else
+      %(set theRecord to create record with {name:"#{name}", type:bookmark, URL:"#{bookmark.url}"} in theGroup)
     end
   end
 
@@ -732,11 +759,11 @@ class Import
   # @param bookmark [Bookmark] bookmark to save
   #
   # @return [Boolean] success status
-  def save_to_dt(type = :markdown, bookmark)
+  def save_to_dt(bookmark, type = :markdown)
     name = bookmark.title.e_as
     annotation = [bookmark.summary, bookmark.doc_note, bookmark.annotation].delete_if(&:empty?).join("\n\n").e_as
     bookmark.tags.concat(@marky_tags) if @marky_tags
-    tags = @options[:apply_tags] ? bookmark.tags.to_as : ""
+    tags = @options[:apply_tags] ? bookmark.tags.to_as : "{}"
 
     cmd = command_for_type(type, bookmark)
 
@@ -766,14 +793,10 @@ class Import
             set comment of theRecord to "#{annotation}"
 
             -- add an annotation link (same content as Finder comment)
-            try
-              set annotation of theRecord to create record with {name:((name of theRecord) as string) & " (Annotation)", type:markdown, content:"#{annotation}"} in (annotations group of database of theRecord)
-            end try
-
+            #{update_annotation(annotation)}
 
             -- add any Readwise document tags
-            set AppleScript's text item delimiters to ","
-            set theList to every text item of "#{tags}"
+            set theList to #{tags}
             if theList is not {} then
               set tags of theRecord to theList
             end if
@@ -796,6 +819,22 @@ APPLESCRIPT`
     end
 
     $CHILD_STATUS.success?
+  end
+
+  def update_annotation(annotation)
+    case version
+    when 4
+      %(set theAnnotation to annotation of theRecord
+			      if theAnnotation is not missing value then
+				      update record theAnnotation with text "#{annotation}" mode replacing
+			      else
+				      set annotation of theRecord to create record with {name:((name of theRecord) as string) & " (Annotation)", type:markdown, content:"#{annotation}"} in (annotations group of database of theRecord)
+            end if)
+    when 3
+      %(try
+              set annotation of theRecord to create record with {name:((name of theRecord) as string) & " (Annotation)", type:markdown, content:"#{annotation}"} in (annotations group of database of theRecord)
+            end try)
+    end
   end
 
   # Search for a record in DEVONthink by title and return its annotation
@@ -868,7 +907,7 @@ APPLESCRIPT`
     path = path_for_title(title)
 
     if path
-      IO.read(path.strip)
+      File.read(path.strip)
     else
       Term.log("Error getting content for #{title}", path, level: :error)
       false
@@ -906,9 +945,9 @@ APPLESCRIPT`
 APPLESCRIPT`
       if $CHILD_STATUS.success?
         Term.stderr "🔆 Highlighted #{bookmark.title}"
-        Term.log("#{bookmark.highlights.count} highlights", bookmark.highlights.map do |h|
-          h.text
-        end.join("\n\n"), level: :info)
+        Term.log("#{bookmark.highlights.count} highlights",
+                 bookmark.highlights.map(&:text).join("\n\n"),
+                 level: :info)
         true
       else
         Term.log("Error getting content for #{bookmark.title}", cmd, level: :error)
@@ -927,7 +966,7 @@ APPLESCRIPT`
     return @options[:back] if @options[:back]
 
     if File.exist?(LAST_UPDATE)
-      last = IO.read(LAST_UPDATE).strip
+      last = File.read(LAST_UPDATE).strip
       last.whitespace_only? ? nil : last
     else
       Term.log("Last update record does not exist", level: :info)
@@ -980,25 +1019,23 @@ def parse_options(options)
     end
 
     opts.on("-b", "--back BACK", "Get highlights back to date using string XdXhXm") do |back|
-      begin
-        options[:back] = back.to_relative_time
-      rescue StandardError
-        puts "Invalid date format. Must be a combination of Xd, Xh, and Xm"
-        Process.exit 1
-      end
+      options[:back] = back.to_relative_time
+    rescue StandardError
+      puts "Invalid date format. Must be a combination of Xd, Xh, and Xm"
+      Process.exit 1
     end
 
     opts.separator ""
 
-    opts.on_tail("-d", "--debug", "Turn on debugging output") do |d|
-      Term.debug = 1 if Term.debug == 0
+    opts.on_tail("-d", "--debug", "Turn on debugging output") do
+      Term.debug = 1 if Term.debug.zero?
     end
 
     opts.on_tail("-q", "--quiet", "Turn off all output") do
       Term.silent = true
     end
 
-    opts.on_tail("-v", "--verbose", "Turn on verbose output") do |d|
+    opts.on_tail("-v", "--verbose", "Turn on verbose output") do
       Term.debug = 2
     end
 
@@ -1028,4 +1065,4 @@ end
 
 options = parse_options(options)
 import = Import.new(options)
-import.save_all(options[:type])
+import.save_all

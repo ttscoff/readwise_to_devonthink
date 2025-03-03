@@ -2,7 +2,7 @@
 
 ![Banner Image][banner]
 
-[banner]: https://cdn3.brettterpstra.com/uploads/2025/02/readwise_devonthink-rb@2x.7462.avif
+[banner]: https://cdn3.brettterpstra.com/uploads/2025/02/readwise_devonthink-rb.avif
 
 [![License: MIT][mitshield]][mit]
 
