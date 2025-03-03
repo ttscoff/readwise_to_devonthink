@@ -12,13 +12,15 @@ annotations in DEVONthink.
 
 ## Installation/Usage
 
-1. Save the [script][raw] to disk, or clone this gist and link the script into your $PATH
+1. Save the [script][raw] to disk, or clone this repository and link the script into your $PATH[^link]
 2. Edit config options hash in the script, external config file (see below), or pass as command line flags
 3. Make script executable, `chmod a+x /path/to/readwise_to_devonthink.rb`
 4. Run script once to get all previous highlights, `/path/to/readwise_to_devonthink.rb`
-5. Set up a launchd job to run script at desired interval
+5. Set up a launchd job (see below) to run script at desired interval
 
-[raw]: https://gist.githubusercontent.com/ttscoff/0a14fcd621526f1ab2ac6fa027df0dea/raw/3f74ca4a6b0ecc3b7bc8a83dbd585e8b43217a74/readwise_to_devonthink.rb
+[raw]: https://raw.githubusercontent.com/ttscoff/readwise_to_devonthink/refs/heads/main/readwise_to_devonthink.rb
+
+[^link]: Creating a symlink, e.g. `ln -s ~/path/to/repo/readwise_to_devonthink.rb /usr/local/bin/readwise_to_devonthink.rb` makes it easy to update just by pulling the repo. Make sure your config is in the separate config file to avoid overwriting it.
 
 ### External configuration
 
@@ -75,6 +77,49 @@ Usage: readwise_to_devonthink.rb [options]
 
 Configuration can be defined in ~/.local/share/devonthink/rw2md.yaml
 ```
+
+### Setting up a launchd job
+
+The easiest way to set up a launchd job is with a GUI like [Lingon][peterborgapps] or [LaunchControl][soma-zone].
+
+If you prefer to do it by hand, you can edit the PLIST below and place it in `~/Library/LaunchAgents`.
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.brettterpstra.readwise</string>
+	<key>Program</key>
+	<string>[/path/to]/readwise_to_devonthink.rb</string>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>[/path/to/]/readwise.stderr</string>
+	<key>StandardOutPath</key>
+	<string>[/path/to]/readwise.stdout</string>
+	<key>StartInterval</key>
+	<integer>3600</integer>
+</dict>
+</plist>
+```
+
+Edit all of the `[/path/to]` to point to your script. The
+`StandardErrorPath` and `StandardOutPath` are optional and can
+be removed, but if provided with a path, will output useful
+information. The `StandardErrorPath` will contain most of the
+output, including warnings and errors. If you add `-d` to
+the Program key command, you can get more debug info in the
+STDERR file.
+
+The `StartInterval` key determines how often the script will
+run, in seconds (e.g. 3600 = 1 hour). The script will always
+gather any new highlights since the last run, so this can be
+spread out as far as you want, e.g. 86400 for once a day.
+
+[peterborgapps]: https://www.peterborgapps.com/lingon/
+[soma-zone]: https://www.soma-zone.com/LaunchControl/
 
 ### Debugging
 
