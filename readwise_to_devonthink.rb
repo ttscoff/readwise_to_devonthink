@@ -354,6 +354,28 @@ class ::String
 
     mine.join("\n\n")
   end
+
+  # Convert relative time string to datetime
+  #
+  # @return [DateTime] DateTime object
+  #
+  # @example
+  #   '1d3h30m'.to_relative_time
+  #   # => DateTime object 1 day, 3 hours, 30 minutes ago
+  def to_relative_time
+    raise StandardError, "Invalid relative time format" unless match?(/^(\d+[dhm])+$/)
+
+    now = DateTime.now
+    offset = { "d" => 0, "h" => 0, "m" => 0 }
+
+    scan(/(\d+)([dhm])/).each do |num, unit|
+      offset[unit] = num.to_i
+    end
+
+    total_seconds = offset["d"] * 24 * 60 * 60 + offset["h"] * 60 * 60 + offset["m"] * 60
+
+    (now - total_seconds / (24 * 60 * 60.0)).strftime("%Y-%m-%dT%H:%M:%S.%L%z")
+  end
 end
 
 class Highlight
@@ -902,6 +924,8 @@ APPLESCRIPT`
   #
   # @return [String, nil] timestamp of last update or nil if file doesn't exist
   def last_update
+    return @options[:back] if @options[:back]
+
     if File.exist?(LAST_UPDATE)
       last = IO.read(LAST_UPDATE).strip
       last.whitespace_only? ? nil : last
@@ -929,6 +953,8 @@ APPLESCRIPT`
   end
 end
 
+options[:back] = nil
+
 def parse_options(options)
   opt_parser = OptionParser.new do |opts|
     opts.banner = "Usage: #{File.basename($PROGRAM_NAME)} [options]"
@@ -951,6 +977,15 @@ def parse_options(options)
 
     opts.on("--apply-tags", "Apply tags from Marky generated markdown") do
       options[:apply_tags] = true
+    end
+
+    opts.on("-b", "--back BACK", "Get highlights back to date using string XdXhXm") do |back|
+      begin
+        options[:back] = back.to_relative_time
+      rescue StandardError
+        puts "Invalid date format. Must be a combination of Xd, Xh, and Xm"
+        Process.exit 1
+      end
     end
 
     opts.separator ""

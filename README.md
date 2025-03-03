@@ -13,10 +13,16 @@ annotations in DEVONthink.
 ## Installation/Usage
 
 1. Save the [script][raw] to disk, or clone this repository and link the script into your $PATH[^link]
-2. Edit config options hash in the script, external config file (see below), or pass as command line flags
-3. Make script executable, `chmod a+x /path/to/readwise_to_devonthink.rb`
-4. Run script once to get all previous highlights, `/path/to/readwise_to_devonthink.rb`
-5. Set up a launchd job (see below) to run script at desired interval
+2. Edit config options hash in the script, external config file ([see below](#external-configuration)), or pass as command line flags
+3. Make the script executable
+
+        $ chmod a+x /path/to/readwise_to_devonthink.rb
+
+4. Run the script once to get all existing highlights:
+
+        $ /path/to/readwise_to_devonthink.rb
+
+5. Set up a launchd job ([see below](#setting-up-a-launchd-job)) to run script at desired interval
 
 [raw]: https://raw.githubusercontent.com/ttscoff/readwise_to_devonthink/refs/heads/main/readwise_to_devonthink.rb
 
@@ -64,10 +70,11 @@ $ readwise_to_devonthink.rb -h
 
 Usage: readwise_to_devonthink.rb [options]
         --token TOKEN                Readwise API token
-    -b, --database DATABASE          Database to save to
+        --database DATABASE          Database to save to
     -g, --group GROUP                Group to save to
     -t, --type TYPE                  Type of archive to save (markdown, bookmark, archive, pdf)
         --apply-tags                 Apply tags from Marky generated markdown
+    -b, --back BACK                  Get highlights back to date using string XdXhXm
 
     -d, --debug                      Turn on debugging output
     -q, --quiet                      Turn off all output
@@ -75,7 +82,7 @@ Usage: readwise_to_devonthink.rb [options]
         --version                    Display version
     -h, --help                       Show this help message
 
-Configuration can be defined in ~/.local/share/devonthink/rw2md.yaml
+Configuration can be defined in /Users/ttscoff/.local/share/devonthink/rw2md.yaml
 ```
 
 ### Setting up a launchd job
@@ -126,10 +133,12 @@ spread out as far as you want, e.g. 86400 for once a day.
 If you run into issues, please follow these steps
 
 1. Ensure that you've created the config file at `~/.local/share/devonthink/rw2md.yaml`. This will make it easier to update the script with revisions because you won't have to edit the config at the top every time.
-2. Set the clock back by editing `~/.local/share/devonthink/readwise_last_update` to a time that will include your last highlight, or to the problematic highlight if the issue is with a particular highlight. Repeat this step as needed until you can replicate the issue.
-3. Run `readwise_to_devonthink.rb -v` to get verbose output.
-4. Copy the output from step 3 to a private gist, or to a text file you can attach to a forum post.
-5. Share the gist in the Issues [here](https://github.com/ttscoff/readwise_to_devonthink/issues), or create a post on <https://forum.brettterpstra.com> and attach the text file there.
+2. Use the `--back` option to parse back a set period of time, e.g. `3h` or `1d`. Increase period as needed to replicate the issue. Include `readwise_to_devonthink.rb -v` to get verbose output. The final command should look like:
+
+        readwise_to_devonthink.rb --back 1d -v
+
+3. Copy the output from step 3 to a private gist, or to a text file you can attach to a forum post.
+4. Share the gist in the Issues [here](https://github.com/ttscoff/readwise_to_devonthink/issues), or create a post on <https://forum.brettterpstra.com> and attach the text file there.
 
 **NOTE:** The verbose output will likely contain the content of the highlight or the entire Markdown content of the highlighted page/text. If this is private for any reason, [share it with me privately](https://brettterpstra.com/contact/), or try to replicate the issue with non-private content and redact the output as needed.
 
