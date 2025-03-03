@@ -1,5 +1,10 @@
 # Readwise to DEVONthink
 
+[![License: MIT][mitshield]][mit]
+
+[mitshield]: https://img.shields.io/badge/License-MIT-yellow.svg
+[mit]: https://opensource.org/licenses/MIT
+
 Reader articles with highlights become searchable text with
 annotations in DEVONthink.
 
@@ -89,7 +94,7 @@ Configuration can be defined in /Users/ttscoff/.local/share/devonthink/rw2md.yam
 
 The easiest way to set up a launchd job is with a GUI like [Lingon][peterborgapps] or [LaunchControl][soma-zone].
 
-If you prefer to do it by hand, you can edit the PLIST below and place it in `~/Library/LaunchAgents`.
+If you prefer to do it by hand, you can edit the PLIST below and place it in `~/Library/LaunchAgents/com.brettterpstra.readwise.plist`.
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -146,3 +151,5 @@ If you run into issues, please follow these steps
 
 - does not handle deletions
 - does not highlight images
+
+

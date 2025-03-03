@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 
-VERSION = '1.0.37'
+VERSION = "1.0.37"
 
 DEBUG = ENV["READWISE_DEBUG"] ? true : false
 CONFIG_FILE = DEBUG ? "~/.local/share/devonthink/rw2md-debug.yaml" : "~/.local/share/devonthink/rw2md.yaml"
