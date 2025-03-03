@@ -1,3 +1,12 @@
+### 1.0.38
+
+2025-03-03 05:22
+
+#### IMPROVED
+
+- Code cleanup
+- Check DT version and use DT4 commands if available
+
 ### 1.0.37
 
 2025-03-03 03:48

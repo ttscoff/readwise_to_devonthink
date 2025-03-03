@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-VERSION = "1.0.37"
+VERSION = '1.0.38'
 
 # Reader articles with highlights become searchable text with annotations in DEVONthink.
 #
