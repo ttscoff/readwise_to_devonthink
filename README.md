@@ -57,6 +57,37 @@ Config options not passed on the command line will be read
 from the config file or the hash in the script (in that
 order).
 
+```console
+$ readwise_to_devonthink.rb -h
+
+Usage: readwise_to_devonthink.rb [options]
+        --token TOKEN                Readwise API token
+    -b, --database DATABASE          Database to save to
+    -g, --group GROUP                Group to save to
+    -t, --type TYPE                  Type of archive to save (markdown, bookmark, archive, pdf)
+        --apply-tags                 Apply tags from Marky generated markdown
+
+    -d, --debug                      Turn on debugging output
+    -q, --quiet                      Turn off all output
+    -v, --verbose                    Turn on verbose output
+        --version                    Display version
+    -h, --help                       Show this help message
+
+Configuration can be defined in ~/.local/share/devonthink/rw2md.yaml
+```
+
+### Debugging
+
+If you run into issues, please follow these steps
+
+1. Ensure that you've created the config file at `~/.local/share/devonthink/rw2md.yaml`. This will make it easier to update the script with revisions because you won't have to edit the config at the top every time.
+2. Set the clock back by editing `~/.local/share/devonthink/readwise_last_update` to a time that will include your last highlight, or to the problematic highlight if the issue is with a particular highlight. Repeat this step as needed until you can replicate the issue.
+3. Run `readwise_to_devonthink.rb -v` to get verbose output.
+4. Copy the output from step 3 to a private gist, or to a text file you can attach to a forum post.
+5. Share the gist in the comments [here](https://gist.github.com/ttscoff/0a14fcd621526f1ab2ac6fa027df0dea), or create a post on <https://forum.brettterpstra.com> and attach the text file there.
+
+**NOTE:** The verbose output will likely contain the content of the highlight or the entire Markdown content of the highlighted page/text. If this is private for any reason, [share it with me privately](https://brettterpstra.com/contact/), or try to replicate the issue with non-private content and redact the output as needed.
+
 ### Caveats
 
 - does not handle deletions
